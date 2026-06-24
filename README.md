@@ -6,6 +6,15 @@ grounded in `LLM Training Presentation Research.docx`. No build step, no depende
 
 ## Run it
 Open **`index.html`** in any modern browser (Chrome/Safari/Firefox). Press **F** for fullscreen.
+Live version: **https://aaryany-peloton.github.io/how-llms-become-smart/**
+
+## Share as one file
+`LLM-talk-standalone.html` is a **single self-contained file** with every image embedded —
+email it, put it on a USB stick, or open it offline; no `images/` folder needed.
+Regenerate it after editing the deck:
+```
+node build-standalone.js
+```
 
 ## Controls
 | Key | Action |

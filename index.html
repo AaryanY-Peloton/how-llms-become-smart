@@ -1362,13 +1362,16 @@ stage.addEventListener('mousemove',()=>{const h=document.getElementById('help');
    INTERACTIVE DEMOS
    ============================================================ */
 
-/* ---- image autoloader: if a real file exists in images/, show it ---- */
+/* ---- image autoloader: show an image if one exists ----
+   Uses an embedded base64 map (window.__IMG__) when present — that's how the
+   single-file "standalone" build works — otherwise falls back to the images/ folder. */
+function imgSrc(fn){ return (window.__IMG__ && window.__IMG__[fn]) ? window.__IMG__[fn] : 'images/'+fn; }
 document.querySelectorAll('.imgslot[data-img]').forEach(slot=>{
   const fn=slot.getAttribute('data-img');
   const img=new Image();
   img.onload=()=>{slot.classList.add('has');slot.innerHTML='';slot.appendChild(img);};
   img.onerror=()=>{};
-  img.src='images/'+fn;
+  img.src=imgSrc(fn);
 });
 
 /* ---- TRANSFORMER peek ---- */
