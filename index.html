@@ -1,0 +1,1755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Do LLMs Become Smart?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   "How Do LLMs Become Smart?" — by Aaryan Y
+   Design thesis: every idea has TWO voices —
+     the human analogy (Bricolage Grotesque) and the machine
+     mechanism (JetBrains Mono).
+   Signature element: THE STACK — five training-stage blocks
+     (BASE → INSTRUCT → CHAT → REASONING → AGENT) that light up
+     and "level up" once we reach GPT-1.
+   Palette: a formal technical keynote on cool paper-white.
+     Amber = the reward / the aha. Indigo = the machine / compute.
+     Emerald = verified-correct. Red = raw, chaotic, wrong.
+   ============================================================ */
+
+:root{
+  --bg:#F5F7FB; --bg2:#FFFFFF; --card:#FFFFFF; --panel:#FFFFFF;
+  --ink:#171A23; --ink-dim:#3C4254; --mute:#646A7D; --faint:#9AA0B2;
+  --gold:#B5730A; --gold-ink:#5E3C00; --gold-soft:rgba(196,131,16,.10);
+  --violet:#5645C9; --violet-soft:rgba(86,69,201,.09);
+  --green:#0F8F5E; --green-soft:rgba(15,143,94,.10);
+  --coral:#CF3B2E; --coral-soft:rgba(207,59,46,.09);
+  --line:rgba(20,26,45,.13); --line-soft:rgba(20,26,45,.07);
+  --blue:#2C66D6;
+  --code-bg:#F0F2F7;
+  --stageW:1280px; --stageH:720px;
+  --display:'Bricolage Grotesque',sans-serif;
+  --body:'Inter',sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#DDE2EC;overflow:hidden}
+body{font-family:var(--body);color:var(--ink);-webkit-font-smoothing:antialiased}
+
+/* ---- scaling stage: everything is designed against a fixed 1280x720
+        canvas and scaled to fit any projector ---- */
+#viewport{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:
+    radial-gradient(1200px 700px at 78% -10%, rgba(86,69,201,.07), transparent 60%),
+    radial-gradient(900px 600px at 5% 110%, rgba(181,115,10,.05), transparent 55%),
+    #E2E6EF;}
+#stage{position:relative;width:var(--stageW);height:var(--stageH);
+  background:var(--bg);overflow:hidden;
+  box-shadow:0 30px 90px -30px rgba(30,40,70,.45),0 0 0 1px rgba(20,26,45,.08);
+  background-image:radial-gradient(rgba(20,26,45,.05) 1px,transparent 1px);
+  background-size:30px 30px;transform-origin:center center;}
+
+/* ---- slides ---- */
+.slide{position:absolute;inset:0;padding:62px 76px 96px;display:none;
+  flex-direction:column;opacity:0;}
+.slide.active{display:flex;animation:slideIn .5s cubic-bezier(.2,.7,.3,1) both}
+.slide.center{justify-content:center}
+@keyframes slideIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.slide.active{animation:none}}
+
+/* ---- type system ----
+   Per direction: the eyebrow (the "— LABEL" line above the title) is the
+   connective tissue between topics, so it's promoted to a prominent size;
+   the sub-line below the title is demoted. */
+.eyebrow{font-family:var(--mono);font-size:17px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--violet);font-weight:700;display:flex;align-items:center;gap:13px;margin-bottom:18px}
+.eyebrow::before{content:"";width:34px;height:3px;background:var(--violet);display:inline-block;border-radius:2px}
+.eyebrow.gold{color:var(--gold)}.eyebrow.gold::before{background:var(--gold)}
+.eyebrow.green{color:var(--green)}.eyebrow.green::before{background:var(--green)}
+.eyebrow.coral{color:var(--coral)}.eyebrow.coral::before{background:var(--coral)}
+
+h1.head{font-family:var(--display);font-weight:700;font-size:60px;line-height:1.03;
+  letter-spacing:-.02em;margin:0 0 16px;max-width:23ch;color:var(--ink)}
+h2.head{font-family:var(--display);font-weight:700;font-size:44px;line-height:1.06;
+  letter-spacing:-.018em;margin:0 0 12px;max-width:26ch;color:var(--ink)}
+.head .hl{color:var(--gold)}
+.head .hlv{color:var(--violet)}
+.head em{font-style:italic;font-weight:500}
+.sub{font-size:18px;line-height:1.5;color:var(--ink-dim);max-width:62ch;font-weight:400}
+.sub .k{color:var(--ink);font-weight:600}
+.lead{font-size:21px;line-height:1.55;color:var(--ink-dim);max-width:46ch}
+p{margin:0 0 12px}
+
+.mono{font-family:var(--mono)}
+.tag{font-family:var(--mono);font-size:12.5px;letter-spacing:.04em;color:var(--mute);font-weight:500}
+
+/* ---- reusable bits ---- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.grow{flex:1;min-height:0}
+.center-col{display:flex;flex-direction:column;justify-content:center}
+.row{display:flex;gap:14px;align-items:center}
+.spread{display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
+
+.card{background:var(--card);
+  border:1px solid var(--line);border-radius:16px;padding:24px 26px;position:relative;
+  box-shadow:0 1px 3px rgba(20,26,45,.05),0 8px 24px -16px rgba(20,26,45,.25)}
+.card h3{font-family:var(--display);font-weight:600;font-size:23px;margin:0 0 8px;letter-spacing:-.01em;color:var(--ink)}
+.card p{font-size:16.5px;line-height:1.5;color:var(--ink-dim);margin:0}
+.card .ico{font-size:30px;margin-bottom:10px;display:block}
+.card.accent-gold{border-color:rgba(181,115,10,.45);box-shadow:0 1px 3px rgba(181,115,10,.08),0 10px 26px -16px rgba(181,115,10,.35)}
+.card.accent-violet{border-color:rgba(86,69,201,.4);box-shadow:0 1px 3px rgba(86,69,201,.08),0 10px 26px -16px rgba(86,69,201,.35)}
+.card.accent-green{border-color:rgba(15,143,94,.4);box-shadow:0 1px 3px rgba(15,143,94,.08),0 10px 26px -16px rgba(15,143,94,.35)}
+.card.accent-coral{border-color:rgba(207,59,46,.4);box-shadow:0 1px 3px rgba(207,59,46,.08),0 10px 26px -16px rgba(207,59,46,.35)}
+
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--mute);margin-bottom:7px;font-weight:600}
+
+/* the human / machine duality treatment */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);
+  border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(20,26,45,.05),0 8px 24px -16px rgba(20,26,45,.25)}
+.duo>div{padding:24px 26px}
+.duo .human{background:var(--gold-soft)}
+.duo .machine{background:var(--violet-soft);border-left:1px solid var(--line)}
+.duo h4{margin:0 0 9px;font-size:13px;letter-spacing:.13em;text-transform:uppercase;font-family:var(--mono);font-weight:700}
+.duo .human h4{color:var(--gold)} .duo .machine h4{color:var(--violet)}
+.duo .human p{font-family:var(--display);font-size:20px;line-height:1.4;color:var(--ink);margin:0}
+.duo .machine p{font-family:var(--mono);font-size:15.5px;line-height:1.55;color:var(--ink-dim);margin:0}
+
+.pill{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;
+  border:1px solid var(--line);font-size:13.5px;color:var(--ink-dim);background:var(--bg2);font-weight:500}
+.pill .dot{width:8px;height:8px;border-radius:50%}
+
+.callout{border-left:4px solid var(--gold);background:var(--gold-soft);padding:16px 20px;
+  border-radius:0 12px 12px 0;font-size:18px;line-height:1.5;color:var(--ink)}
+.callout.v{border-color:var(--violet);background:var(--violet-soft)}
+.callout.g{border-color:var(--green);background:var(--green-soft)}
+
+.bignum{font-family:var(--display);font-weight:800;font-size:78px;line-height:.9;letter-spacing:-.03em}
+.bignum.gold{color:var(--gold)} .bignum.violet{color:var(--violet)} .bignum.green{color:var(--green)}
+
+ul.ticks{list-style:none;padding:0;margin:0}
+ul.ticks li{position:relative;padding-left:30px;margin-bottom:13px;font-size:18px;line-height:1.45;color:var(--ink-dim)}
+ul.ticks li::before{content:"";position:absolute;left:0;top:7px;width:16px;height:16px;border-radius:5px;
+  background:var(--gold-soft);border:1.5px solid var(--gold)}
+ul.ticks li b{color:var(--ink);font-weight:600}
+
+.token{display:inline-block;font-family:var(--mono);font-size:15px;padding:3px 9px;margin:3px 2px;
+  border-radius:7px;background:var(--violet-soft);border:1px solid rgba(86,69,201,.35);color:var(--violet);font-weight:500}
+.codebox{font-family:var(--mono);font-size:15px;line-height:1.65;background:var(--code-bg);
+  border:1px solid var(--line);border-radius:14px;padding:18px 20px;color:var(--ink-dim);white-space:pre-wrap}
+.codebox .c{color:var(--faint)} .codebox .g{color:var(--green)} .codebox .o{color:var(--gold)}
+.codebox .v{color:var(--violet)} .codebox .r{color:var(--coral)}
+
+.btn{font-family:var(--mono);font-size:14px;font-weight:500;letter-spacing:.02em;cursor:pointer;
+  padding:10px 18px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);
+  color:var(--ink);transition:.15s;user-select:none;box-shadow:0 1px 2px rgba(20,26,45,.06)}
+.btn:hover{background:#EEF1F7;border-color:var(--violet)}
+.btn.primary{background:var(--gold);color:#fff;border-color:var(--gold);font-weight:700}
+.btn.primary:hover{filter:brightness(1.06)}
+.input{font-family:var(--mono);font-size:16px;padding:11px 15px;border-radius:10px;
+  border:1px solid var(--line);background:#fff;color:var(--ink);width:100%;outline:none;
+  box-shadow:inset 0 1px 2px rgba(20,26,45,.06)}
+.input:focus{border-color:var(--violet);box-shadow:0 0 0 3px var(--violet-soft)}
+
+/* image placeholder slots — user will drop files into images/ */
+.imgslot{border:1.5px dashed var(--line);border-radius:16px;background:
+  repeating-linear-gradient(135deg,rgba(20,26,45,.025),rgba(20,26,45,.025) 12px,transparent 12px,transparent 24px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--mute);
+  font-family:var(--mono);font-size:12.5px;text-align:center;padding:18px;min-height:90px;overflow:hidden}
+.imgslot .ic{font-size:26px;opacity:.6}
+.imgslot .fn{color:var(--mute)}
+/* loaded image fills the slot via absolute positioning so a tall/portrait
+   source can never push the slot taller than its layout box */
+.imgslot.has{position:relative;padding:0;min-height:0}
+.imgslot.has img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:14px;display:block}
+/* .fit → show the WHOLE image (no zoom/crop) for text-heavy shots & memes */
+.imgslot.fit.has{background:#fff;border:1px solid var(--line)}
+.imgslot.fit.has img{object-fit:contain}
+
+/* =================== CHROME (lives inside stage, scales with it) =================== */
+#progress{position:absolute;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--gold),var(--violet));
+  width:0;z-index:40;transition:width .4s ease}
+#counter{position:absolute;top:20px;right:26px;font-family:var(--mono);font-size:12px;color:var(--faint);z-index:40;letter-spacing:.08em;font-weight:600}
+#actlabel{position:absolute;top:20px;left:26px;font-family:var(--mono);font-size:11.5px;color:var(--mute);
+  z-index:40;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+
+/* THE STACK rail — signature element */
+#stack{position:absolute;left:0;right:0;bottom:0;height:52px;z-index:35;display:flex;align-items:center;
+  gap:0;padding:0 26px;background:linear-gradient(180deg,transparent,rgba(245,247,251,.96) 45%);
+  font-family:var(--mono)}
+#stack .lbl{font-size:10.5px;letter-spacing:.16em;color:var(--faint);text-transform:uppercase;margin-right:16px;font-weight:700}
+#stack .blocks{display:flex;gap:8px;align-items:center;flex:1}
+/* three states: future (grey, dim) · current (gold, filled) · done (green, filled) */
+.sblock{flex:1;max-width:175px;display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:9px;
+  border:1px solid var(--line-soft);background:var(--bg2);transition:.45s;opacity:.45}
+.sblock .n{font-size:10px;color:var(--faint);font-weight:700}
+.sblock .t{font-size:12px;letter-spacing:.06em;color:var(--mute);text-transform:uppercase;white-space:nowrap;font-weight:600}
+/* current stage — filled gold */
+.sblock.cur{opacity:1;background:var(--gold);border-color:var(--gold);box-shadow:0 4px 14px rgba(181,115,10,.4)}
+.sblock.cur .t,.sblock.cur .n{color:#fff}
+/* completed stage — filled green */
+.sblock.done{opacity:1;background:var(--green);border-color:var(--green);box-shadow:0 2px 10px rgba(15,143,94,.3)}
+.sblock.done .t,.sblock.done .n{color:#fff}
+.sblock .arrow{color:var(--faint)}
+#stack.hidden{opacity:0;pointer-events:none}
+
+/* overview grid */
+#overview{position:fixed;inset:0;background:rgba(226,230,239,.97);z-index:90;display:none;
+  padding:40px 48px;overflow-y:auto}
+#overview.show{display:block}
+#overview h3{font-family:var(--display);font-size:22px;margin:0 0 22px;color:var(--ink)}
+.ovgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.ovcard{aspect-ratio:16/9;border:1px solid var(--line);border-radius:10px;background:var(--bg2);
+  padding:12px;cursor:pointer;transition:.15s;overflow:hidden;position:relative;box-shadow:0 2px 8px -4px rgba(20,26,45,.25)}
+.ovcard:hover{border-color:var(--violet);transform:translateY(-2px)}
+.ovcard .ovn{font-family:var(--mono);font-size:10px;color:var(--faint);font-weight:600}
+.ovcard .ovt{font-family:var(--display);font-size:13.5px;line-height:1.2;color:var(--ink-dim);margin-top:6px;font-weight:600}
+.ovcard.curr{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
+
+/* help */
+#help{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:60;font-family:var(--mono);
+  font-size:11px;color:var(--mute);background:rgba(255,255,255,.95);border:1px solid var(--line);
+  padding:5px 14px;border-radius:999px;transition:.3s;pointer-events:none;box-shadow:0 4px 14px -6px rgba(20,26,45,.3)}
+#help.fade{opacity:0}
+#help b{color:var(--ink)}
+.kbd{display:inline-block;border:1px solid var(--line);border-radius:5px;padding:0 6px;color:var(--ink-dim);background:var(--bg2)}
+
+/* utility */
+.flex{display:flex} .between{justify-content:space-between} .end{align-items:flex-end}
+.mt-a{margin-top:auto} .gap-s{gap:10px} .wrap{flex-wrap:wrap}
+.fade-mute{color:var(--mute)} .small{font-size:15px;line-height:1.5}
+.arrow-r{color:var(--violet);font-family:var(--mono)}
+.strike{text-decoration:line-through;text-decoration-color:var(--coral);text-decoration-thickness:2px}
+</style>
+</head>
+<body>
+<div id="viewport">
+  <div id="stage">
+    <div id="progress"></div>
+    <div id="actlabel"></div>
+    <div id="counter"></div>
+
+    <!-- ===================== SLIDES ===================== -->
+
+<!-- 1. TITLE -->
+<section class="slide center" data-nostack data-title="Title" data-act="">
+  <div class="eyebrow">An engineer’s guide to how they’re built</div>
+  <h1 class="head" style="font-size:74px;max-width:18ch">How do <span class="hlv">LLMs</span> become <span class="hl">smart</span>?</h1>
+  <p class="sub" style="font-size:23px;max-width:54ch">We're going to <em style="color:var(--ink);font-style:italic">grow a model in front of you</em> — from an empty brain that knows nothing, to the agent inside Claude Code. No math. Just analogies, history, and a few memes.</p>
+  <div class="row" style="margin-top:38px;gap:18px">
+    <div style="width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,var(--gold),var(--violet));display:flex;align-items:center;justify-content:center;font-family:var(--display);font-weight:800;color:#10111a;font-size:20px">A</div>
+    <div>
+      <div style="font-family:var(--display);font-weight:700;font-size:20px">Aaryan Y</div>
+      <div class="tag">Machine Learning Engineer · Content AI Team</div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. THE MAP -->
+<section class="slide center" data-nostack data-title="Roadmap" data-act="Roadmap">
+  <div class="eyebrow">The roadmap for today</div>
+  <h2 class="head">One model, built up in <span class="hl">stages.</span></h2>
+  <p class="sub" style="margin-bottom:30px">Each stage adds a capability on top of the previous weights — same model, new behaviour. Once we reach GPT‑1, a progress rail at the bottom tracks which stage we're on.</p>
+  <div class="flex wrap" style="gap:10px;align-items:center;font-family:var(--mono);font-size:14px">
+    <span class="pill"><span class="dot" style="background:var(--violet)"></span>Learning styles</span><span class="arrow-r">→</span>
+    <span class="pill"><span class="dot" style="background:var(--violet)"></span>Why text</span><span class="arrow-r">→</span>
+    <span class="pill"><span class="dot" style="background:var(--violet)"></span>Transformer</span><span class="arrow-r">→</span>
+    <span class="pill"><span class="dot" style="background:var(--gold)"></span>Next-word</span><span class="arrow-r">→</span>
+    <span class="pill"><span class="dot" style="background:var(--gold)"></span>GPT-1/2/3</span><span class="arrow-r">→</span>
+    <span class="pill"><span class="dot" style="background:var(--gold)"></span>RLHF · ChatGPT</span><span class="arrow-r">→</span>
+    <span class="pill"><span class="dot" style="background:var(--green)"></span>Reasoning</span><span class="arrow-r">→</span>
+    <span class="pill"><span class="dot" style="background:var(--green)"></span>Code &amp; Tools</span><span class="arrow-r">→</span>
+    <span class="pill"><span class="dot" style="background:var(--coral)"></span>Decode a name</span>
+  </div>
+  <div class="duo" style="margin-top:34px;max-width:none">
+    <div class="human"><h4>Two halves</h4><p><span style="color:var(--gold)">Pre-training</span> — learn language and world knowledge from raw text. Then <span style="color:var(--green)">post-training</span> — shape behaviour, reasoning, and tool use.</p></div>
+    <div class="machine"><h4>The pipeline</h4><p>pre-train → SFT → RLHF → RLVR → tool use<br>We'll define every term on this line by the end.</p></div>
+  </div>
+</section>
+
+<!-- ========= PART 1 — THE 3 METHODS TO TEACH MODELS ========= -->
+
+<!-- 3. ML = examples not rules -->
+<section class="slide" data-title="Examples, not rules" data-act="Part 1 · The 3 methods to teach models">
+  <div class="eyebrow">Foundations · how machine learning differs from software</div>
+  <h2 class="head">Software follows <span class="strike">rules</span>. Machine learning learns from <span class="hl">examples</span>.</h2>
+  <div class="grid2 grow" style="margin-top:20px">
+    <div class="card accent-coral center-col">
+      <span class="kicker" style="color:var(--coral)">The old way · hand-written rules</span>
+      <div class="codebox" style="font-size:16px">if email contains <span class="o">"free money"</span> → spam
+if email contains <span class="o">"viagra"</span> → spam
+if email contains <span class="o">"you won"</span> → spam
+<span class="c">… and 10,000 more rules a human typed,</span>
+<span class="c">   still missing every new trick.</span></div>
+    </div>
+    <div class="card accent-green center-col">
+      <span class="kicker" style="color:var(--green)">The ML way · show examples</span>
+      <p style="font-size:19px;color:var(--ink);line-height:1.5">Show it <b>10,000 emails</b> already marked spam / not-spam. The machine writes its <em>own</em> rule — it learns the <b>vibe</b> of spam, including tricks no human listed.</p>
+      <div class="pill" style="margin-top:16px;align-self:flex-start"><span class="dot" style="background:var(--green)"></span>Nobody can list every spam phrase — but you can show examples</div>
+    </div>
+  </div>
+  <div class="callout v" style="margin-top:18px">That flip — from <b>writing rules</b> to <b>showing examples</b> — is the entire foundation. Everything today is built on it.</div>
+</section>
+
+<!-- 4. THE 3 METHODS OVERVIEW -->
+<section class="slide" data-title="The 3 methods to teach models" data-act="Part 1 · The 3 methods to teach models">
+  <div class="eyebrow gold">Three ways to train a machine-learning model</div>
+  <h2 class="head">The <span class="hl">3 methods</span> to teach a model.</h2>
+  <p class="sub">They differ by one thing: <b>what you hand the model during training.</b></p>
+  <div class="grid3 grow" style="margin-top:22px">
+    <div class="card accent-gold center-col">
+      <span class="kicker" style="color:var(--gold)">Method 1</span><h3>Supervised</h3>
+      <p>Give the model both the <b>input and the correct output</b>; it learns the mapping between them.</p>
+      <div class="tag" style="margin-top:14px">needs labelled data</div>
+    </div>
+    <div class="card accent-violet center-col">
+      <span class="kicker" style="color:var(--violet)">Method 2</span><h3>Unsupervised</h3>
+      <p>Give the model <b>only inputs, no labels</b>; it discovers structure and patterns on its own.</p>
+      <div class="tag" style="margin-top:14px">no labels required</div>
+    </div>
+    <div class="card accent-green center-col">
+      <span class="kicker" style="color:var(--green)">Method 3</span><h3>Reinforcement</h3>
+      <p>Give the model a <b>reward signal</b>, not answers; it acts, gets scored, and adjusts to maximise reward.</p>
+      <div class="tag" style="margin-top:14px">learns from a score</div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:18px">We'll define each precisely — input, output, and objective — then later see which method trains each stage of an LLM.</div>
+</section>
+
+<!-- 5. SUPERVISED -->
+<section class="slide" data-title="Supervised learning" data-act="Part 1 · The 3 methods to teach models">
+  <div class="eyebrow gold">Method 1 of 3 · supervised learning</div>
+  <h2 class="head">Give the model <span class="hl">input + correct output.</span> It learns the mapping.</h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1.1fr .9fr">
+    <div class="center-col" style="gap:16px">
+      <div class="card accent-gold">
+        <span class="kicker" style="color:var(--gold)">the setup</span>
+        <p style="font-size:18px;color:var(--ink);line-height:1.55">We supply a dataset of <b>labelled pairs</b> — each input paired with its correct output. The model predicts, we compare to the label, and we adjust it to reduce the error. Repeat until it generalises to inputs it has never seen.</p>
+      </div>
+      <div class="codebox" style="font-size:15px"><span class="c"># labelled training pairs</span>
+🐶 image        → label: <span class="g">"dog"</span>
+"loved it!"     → label: <span class="g">"positive"</span>
+[1500 sq ft, …] → label: <span class="g">$420,000</span>
+<span class="c"># model learns input ─▶ output</span></div>
+    </div>
+    <div class="center-col" style="gap:14px">
+      <div class="imgslot fit" style="flex:1;min-height:0" data-img="supervised-flashcards.jpg"><span class="ic">🖼️</span><div>labelled-data illustration</div><div class="fn">images/supervised-flashcards.jpg</div></div>
+      <div class="card" style="padding:16px 18px">
+        <span class="kicker">typical tasks</span>
+        <div class="flex wrap gap-s"><span class="pill">classification</span><span class="pill">spam / not-spam</span><span class="pill">image labelling</span><span class="pill">regression</span></div>
+      </div>
+      <div class="tag">cost: a human must label every example — accurate, but expensive.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. UNSUPERVISED -->
+<section class="slide" data-title="Unsupervised learning" data-act="Part 1 · The 3 methods to teach models">
+  <div class="eyebrow">Method 2 of 3 · unsupervised learning</div>
+  <h2 class="head">Give the model <span class="hlv">inputs only.</span> It finds the structure.</h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:.9fr 1.1fr">
+    <div class="center-col" style="gap:14px">
+      <div class="imgslot" style="flex:1" data-img="unsupervised-blocks.jpg"><span class="ic">🖼️</span><div>clustering illustration</div><div class="fn">images/unsupervised-blocks.jpg</div></div>
+      <div class="card" style="padding:16px 18px">
+        <span class="kicker">typical tasks</span>
+        <div class="flex wrap gap-s"><span class="pill">clustering</span><span class="pill">customer segments</span><span class="pill">recommendation</span><span class="pill">anomaly detection</span></div>
+      </div>
+    </div>
+    <div class="center-col" style="gap:16px">
+      <div class="card accent-violet">
+        <span class="kicker" style="color:var(--violet)">the setup</span>
+        <p style="font-size:18px;color:var(--ink);line-height:1.55">No labels are provided — only the raw inputs. The model groups similar examples and surfaces hidden patterns, deciding for itself how the data is organised.</p>
+      </div>
+      <div class="codebox" style="font-size:15px"><span class="c"># raw inputs, no labels</span>
+[ ●  ●  ▲  ●  ▲  ■  ▲  ■ ]
+        │ find structure
+        ▼
+cluster A: ● ●  cluster B: ▲ ▲  cluster C: ■ ■</div>
+    </div>
+  </div>
+</section>
+
+<!-- 7. REINFORCEMENT -->
+<section class="slide" data-title="Reinforcement learning" data-act="Part 1 · The 3 methods to teach models">
+  <div class="eyebrow green">Method 3 of 3 · reinforcement learning</div>
+  <h2 class="head">No answers — just a <span style="color:var(--green)">reward.</span> The model learns by trial.</h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1.1fr .9fr">
+    <div class="center-col" style="gap:16px">
+      <div class="card accent-green">
+        <span class="kicker" style="color:var(--green)">the setup</span>
+        <p style="font-size:18px;color:var(--ink);line-height:1.55">An <b>agent</b> takes an <b>action</b> in an environment and receives a <b>reward</b> (or penalty). It is never told the correct action — it explores, and adjusts its strategy to maximise total reward over time.</p>
+      </div>
+      <div class="codebox" style="font-size:15px">state ──▶ <span class="v">agent</span> ──▶ action ──▶ environment
+                              │
+        reward / penalty ◀────┘
+<span class="c"># goal: maximise cumulative reward</span></div>
+    </div>
+    <div class="center-col" style="gap:14px">
+      <div class="imgslot" style="flex:1" data-img="reinforcement-bike.jpg"><span class="ic">🖼️</span><div>trial-and-error illustration</div><div class="fn">images/reinforcement-bike.jpg</div></div>
+      <div class="card" style="padding:16px 18px">
+        <span class="kicker">typical tasks</span>
+        <div class="flex wrap gap-s"><span class="pill">game playing (AlphaGo)</span><span class="pill">robotics control</span><span class="pill">sequential decisions</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7b. REINFORCEMENT LEARNING — INTERACTIVE MAZE -->
+<section class="slide" data-title="RL, made concrete" data-act="Part 1 · The 3 methods to teach models" data-init="initMaze" data-reset="initMaze">
+  <div class="eyebrow green">Reinforcement learning · a worked example</div>
+  <h2 class="head" style="font-size:38px;margin-bottom:6px">A robot in a maze: <span style="color:var(--green)">state</span>, <span class="hlv">action</span>, <span class="hl">reward.</span></h2>
+  <p class="sub" style="margin-bottom:12px;font-size:16px">The robot 🤖 wants the goal 🏁 and must avoid bombs 💣. It can move in 4 directions. Each move earns a reward — <b>step it forward</b> and watch the total accumulate.</p>
+  <div class="grid2 grow" style="grid-template-columns:auto 1fr;gap:26px;align-items:start;min-height:0">
+    <!-- the maze grid -->
+    <div data-noadvance style="display:flex;flex-direction:column;gap:10px;align-items:center">
+      <div id="mazegrid" style="display:grid;gap:5px"></div>
+      <div class="row" style="gap:10px">
+        <button class="btn primary" data-noadvance onclick="mazeStep()" id="mazestepbtn">▶ Take best step</button>
+        <button class="btn" data-noadvance onclick="initMaze()">↺ reset</button>
+      </div>
+    </div>
+    <!-- the RL readout -->
+    <div data-noadvance style="display:flex;flex-direction:column;gap:12px;min-width:0">
+      <div class="grid3" style="gap:10px">
+        <div class="card" style="padding:12px 14px"><span class="kicker">state</span><div class="mono" id="mazestate" style="font-size:18px;color:var(--ink);font-weight:700">(0,0)</div><div class="tag">robot's cell</div></div>
+        <div class="card" style="padding:12px 14px"><span class="kicker">last action</span><div class="mono" id="mazeaction" style="font-size:18px;color:var(--violet);font-weight:700">—</div><div class="tag">the move taken</div></div>
+        <div class="card accent-gold" style="padding:12px 14px"><span class="kicker" style="color:var(--gold)">total reward</span><div class="mono" id="mazetotal" style="font-size:22px;color:var(--gold);font-weight:700">0</div><div class="tag">cumulative</div></div>
+      </div>
+      <div class="card" style="padding:14px 16px">
+        <span class="kicker">available actions from this state — reward if taken</span>
+        <div id="mazeactions" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px"></div>
+      </div>
+      <div class="card" style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <div class="flex wrap gap-s" style="font-size:13px">
+          <span class="pill"><span class="dot" style="background:var(--green)"></span>reach goal <b style="color:var(--green)">+100</b></span>
+          <span class="pill"><span class="dot" style="background:var(--blue)"></span>closer to goal <b style="color:var(--blue)">+1</b></span>
+          <span class="pill"><span class="dot" style="background:var(--mute)"></span>farther <b>−1</b></span>
+          <span class="pill"><span class="dot" style="background:var(--coral)"></span>hit a bomb <b style="color:var(--coral)">−10</b></span>
+        </div>
+      </div>
+      <div id="mazelog" class="tag" style="min-height:18px;line-height:1.5"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. RECAP -->
+<section class="slide center" data-title="The 3 methods, summarised" data-act="Part 1 · The 3 methods to teach models">
+  <div class="eyebrow">The takeaway from Part 1</div>
+  <h2 class="head" style="max-width:30ch">Three methods, distinguished by <span class="hl">what the model is given.</span></h2>
+  <div class="grid3" style="margin-top:26px">
+    <div class="card accent-gold center-col"><span class="kicker" style="color:var(--gold)">supervised</span><p style="font-size:16px;color:var(--ink)"><b>input + output</b> → learn the mapping</p></div>
+    <div class="card accent-violet center-col"><span class="kicker" style="color:var(--violet)">unsupervised</span><p style="font-size:16px;color:var(--ink)"><b>input only</b> → find the structure</p></div>
+    <div class="card accent-green center-col"><span class="kicker" style="color:var(--green)">reinforcement</span><p style="font-size:16px;color:var(--ink)"><b>reward signal</b> → maximise the score</p></div>
+  </div>
+  <div class="callout" style="margin-top:26px;font-size:19px">Keep these three in mind. Next: why language was the right problem to attack first.</div>
+</section>
+
+<!-- ========= PART 2 — WHY TEXT + THE TRANSFORMER ========= -->
+
+<!-- 9. WHY TEXT -->
+<section class="slide" data-title="Why text first?" data-act="Part 2 · Why text — and the Transformer">
+  <div class="eyebrow">"Language is the operating system of human thought"</div>
+  <h2 class="head">Why did AI crack <span class="hl">language</span> before folding laundry?</h2>
+  <div class="grid3 grow" style="margin-top:22px">
+    <div class="card center-col"><span class="ico">🆓</span><h3>Everywhere &amp; free</h3><p>The internet, books, code, Wikipedia. Billions of examples humanity <b>already wrote.</b></p></div>
+    <div class="card center-col"><span class="ico">💾</span><h3>Already digital</h3><p>No robots, no sensors, no breakable hardware. Train millions of times a second.</p></div>
+    <div class="card center-col accent-gold"><span class="ico">🧠</span><h3>Thought, compressed</h3><p>To predict the next word in a physics textbook, you <em>kind of have to understand physics.</em></p></div>
+  </div>
+  <div class="callout v" style="margin-top:20px">Robots need a body and slow real-world trial-and-error. Text is the <b>cheapest, biggest, richest dataset humanity has ever made</b> — and it's secretly compressed reasoning.</div>
+</section>
+
+<!-- 10. OLD NLP -->
+<section class="slide" data-title="Pre-2017 NLP" data-act="Part 2 · Why text — and the Transformer">
+  <div class="eyebrow coral">The "before times" · pre-2017</div>
+  <h2 class="head">For decades, humans <span style="color:var(--coral)">hand-wrote</span> every language rule.</h2>
+  <div class="grid2 grow" style="margin-top:16px">
+    <div class="card accent-coral center-col">
+      <div class="codebox" style="font-size:15px">
+<span class="c"># armies of linguists, by hand:</span>
+if word.endswith(<span class="o">"ed"</span>): tense = <span class="o">"past"</span>
+sentiment = sum(<span class="o">GOOD_WORDS</span>) - sum(<span class="o">BAD_WORDS</span>)
+grammar = parse(<span class="o">CHOMSKY_RULES</span>)   <span class="c"># millions of them</span>
+dictionary.lookup(word) <span class="c">or</span> crash() <span class="r"># 💥 slang? irony?</span>
+      </div>
+    </div>
+    <div class="center-col" style="gap:14px">
+      <ul class="ticks">
+        <li><b>Rule-based &amp; dictionary-based.</b> Give the computer a strict grammar textbook.</li>
+        <li><b>Brittle.</b> One slang word, one bit of sarcasm, and the whole thing breaks.</li>
+        <li><b>Narrow.</b> Only worked on short, clean sentences.</li>
+        <li><b>Doesn't scale.</b> Every new language or domain = start completely over.</li>
+      </ul>
+      <div class="tag">ELIZA · SHRDLU · early Google Translate · Clippy · autocorrect disasters</div>
+    </div>
+  </div>
+</section>
+
+<!-- 11. THE TEXT CHALLENGE -->
+<section class="slide" data-title="Why text is hard" data-act="Part 2 · Why text — and the Transformer">
+  <div class="eyebrow">The real question</div>
+  <h2 class="head">Text is <span class="hlv">free-flowing</span> — what comes next depends on <span class="hl">everything before.</span></h2>
+  <div class="grid2 grow" style="margin-top:18px">
+    <div class="card center-col">
+      <span class="kicker">images were "easy" to frame</span>
+      <p style="font-size:18px;color:var(--ink-dim);line-height:1.5">Collect thousands of pictures, <b>label each one</b> "cat" or "dog." Painful and human-intensive — but at least the task was obvious.</p>
+    </div>
+    <div class="card accent-violet center-col">
+      <span class="kicker" style="color:var(--violet)">text was a puzzle</span>
+      <p style="font-size:18px;color:var(--ink);line-height:1.5">How do you even turn raw text into a training task? Question-answering? Fill-in-the-blank? And how do you use <b>all</b> the text we have — not just hand-labeled bits?</p>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:18px">We needed a model that reads <b>all the previous words</b> to predict what comes next — and a way to train it that uses <em>every sentence ever written.</em></div>
+</section>
+
+<!-- 12. TRANSFORMER -->
+<section class="slide center" data-title="The Transformer (2017)" data-act="Part 2 · Why text — and the Transformer" data-init="initTransformer">
+  <div class="eyebrow gold">2017 · Google · "Attention Is All You Need"</div>
+  <h2 class="head">Then one architecture changed <span class="hl">everything.</span></h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1fr 1fr;align-items:center">
+    <div id="txbox" data-noadvance style="cursor:pointer;border:1px solid var(--line);border-radius:18px;padding:30px;background:var(--violet-soft);position:relative;min-height:240px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;transition:.4s">
+      <div id="txcover">
+        <div style="font-family:var(--display);font-weight:800;font-size:34px;letter-spacing:.04em;color:var(--violet)">TRANSFORMER</div>
+        <div class="tag" style="margin-top:10px">▸ click to peek inside (then we close it again)</div>
+      </div>
+      <div id="txguts" style="display:none;width:100%;text-align:center">
+        <img src="images/transformer_architecture.webp" alt="Transformer architecture"
+             style="max-height:170px;max-width:100%;border-radius:10px;background:#fff;padding:6px"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div style="display:none;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--ink-dim);text-align:left">
+          <span style="color:var(--faint)"># the box I'm NOT opening today</span><br>
+          Input → [ Embed ] → [ <span style="color:var(--violet)">Self-Attention</span> ]<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ [ Feed-Forward ] → ×N layers → probs
+        </div>
+        <div class="tag" style="margin-top:8px;color:var(--gold)">…and that's all you get — back in the box! 📦</div>
+      </div>
+    </div>
+    <div class="center-col">
+      <p class="sub" style="font-size:19px">Older models read one word at a time and <b>forgot the start of the sentence by the end</b> (the "memory wall"). The Transformer looks at the <span class="hl">whole context at once</span> and learns <em>which words relate to which</em> — "<span class="hlv">it</span>" refers back to "<span class="hlv">the dog</span>."</p>
+      <div class="callout v" style="margin-top:8px">Its superpower has a name: <b>attention.</b> It's wildly parallel — so you can throw enormous computers at it. That unlocked <b>scale.</b></div>
+      <div class="tag" style="margin-top:14px">GPT · Claude · Gemini · Llama — all Transformers.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ========= PART 3 — THE PRE-TRAINING OBJECTIVE ========= -->
+
+<!-- 14. SECRETLY EVERYTHING -->
+<section class="slide" data-title="Why prediction is enough" data-act="Part 3 · The pre-training objective">
+  <div class="eyebrow gold">Why next-token prediction is sufficient</div>
+  <h2 class="head">To fill these blanks well, it has <span class="hl">no choice</span> but to learn…</h2>
+  <div style="margin-top:16px;display:flex;flex-direction:column;gap:14px">
+    <div class="card flex between" style="align-items:center;padding:18px 24px">
+      <div style="font-family:var(--display);font-size:23px;color:var(--ink)">"Roses are red, violets are <span class="hl">____</span>"</div>
+      <span class="pill"><span class="dot" style="background:var(--violet)"></span>grammar &amp; pattern</span>
+    </div>
+    <div class="card flex between" style="align-items:center;padding:18px 24px">
+      <div style="font-family:var(--mono);font-size:22px;color:var(--ink)">2 + 2 = <span class="hl">____</span></div>
+      <span class="pill"><span class="dot" style="background:var(--gold)"></span>arithmetic</span>
+    </div>
+    <div class="card flex between" style="align-items:center;padding:18px 24px">
+      <div style="font-family:var(--display);font-size:23px;color:var(--ink)">"The murderer turned out to be the <span class="hl">____</span>"</div>
+      <span class="pill"><span class="dot" style="background:var(--green)"></span>multi-step reasoning</span>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:20px;font-size:20px">To predict the last word of a mystery novel, you basically had to <b>follow the whole plot.</b> Forcing next-word prediction forces it to learn grammar, world facts, logic — and reasoning.</div>
+</section>
+
+<!-- 15. SELF-SUPERVISED -->
+<section class="slide" data-title="Self-supervised" data-act="Part 3 · The pre-training objective">
+  <div class="eyebrow">Self-supervision · the data labels itself</div>
+  <h2 class="head">No humans required. The <span class="hl">answer is already there.</span></h2>
+  <div class="grid2 grow" style="margin-top:18px;align-items:center">
+    <div class="center-col">
+      <div class="card accent-green">
+        <div style="font-family:var(--mono);font-size:16px;line-height:1.8;color:var(--ink-dim)">
+"The capital of France is <span style="color:var(--faint)">[ ? ]</span>"<br>
+<span style="margin-left:0">→ the label is the very next word</span><br>
+<span style="margin-left:0">&nbsp;&nbsp;&nbsp;<b style="color:var(--green)">already in the text:</b> <span class="token" style="background:var(--green-soft);border-color:var(--green);color:var(--green)">Paris</span></span>
+        </div>
+      </div>
+      <div class="tag" style="margin-top:14px">no annotators · no labeling cost · trillions of examples</div>
+    </div>
+    <div class="center-col">
+      <p class="sub">Remember supervised learning's expensive human labels? Here's the magic: the label is <b>just the next word that's already written.</b></p>
+      <div class="callout g" style="margin-top:8px">You get the <b>scale</b> of unsupervised (nobody labeling) with the <b>precision</b> of supervised (there's a right answer every time). Nerds call it <span style="color:var(--green)">self-supervised learning</span> — and it's why we can train on the whole internet.</div>
+    </div>
+  </div>
+  <div class="pill" style="margin-top:18px;align-self:flex-start;border-color:rgba(255,194,75,.4);color:var(--gold)"><span class="dot" style="background:var(--gold)"></span>This whole stage has a name: <b>&nbsp;PRE-TRAINING</b></div>
+</section>
+
+<!-- 16b. NEXT-WORD AS OBJECTIVE (the "how", after the "why") -->
+<section class="slide" data-title="The pre-training objective" data-act="Part 3 · The pre-training objective">
+  <div class="eyebrow gold">So how do we actually train on raw text?</div>
+  <h2 class="head">Turn "understand language" into a <span class="hl">fill-in-the-blank game.</span></h2>
+  <p class="sub">Take any sentence. Hide the next word. Make the model guess. Check against the real word. Nudge it. Repeat a few <b>trillion</b> times.</p>
+  <div class="card accent-gold" style="margin-top:22px">
+    <span class="kicker" style="color:var(--gold)">one sentence becomes many training examples</span>
+    <div style="font-family:var(--mono);font-size:17px;line-height:2.2;color:var(--ink)">
+      <div><span class="token">The</span> <span class="arrow-r">predict →</span> <span class="token" style="background:var(--gold-soft);border-color:var(--gold);color:var(--gold)">quick</span></div>
+      <div><span class="token">The</span> <span class="token">quick</span> <span class="arrow-r">predict →</span> <span class="token" style="background:var(--gold-soft);border-color:var(--gold);color:var(--gold)">brown</span></div>
+      <div><span class="token">The</span> <span class="token">quick</span> <span class="token">brown</span> <span class="arrow-r">predict →</span> <span class="token" style="background:var(--gold-soft);border-color:var(--gold);color:var(--gold)">fox</span></div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:18px">That's it — that's the <b>entire training objective</b> for a base model. <span class="fade-mute">Sounds trivial. It is secretly everything.</span></div>
+</section>
+
+<!-- 16. TOKENS HOUSEKEEPING + DEMO -->
+<section class="slide" data-title="Tokens, not words" data-act="Part 3 · The pre-training objective" data-init="initTokens" data-reset="initTokens">
+  <div class="eyebrow">A note on representation · tokens</div>
+  <h2 class="head">Models don't see words. They see <span class="hlv">tokens.</span></h2>
+  <p class="sub" style="margin-bottom:16px">Tokens are word-chunks — Lego bricks of text. It lets a model handle any word, even ones it's never seen, by building them from pieces. <b>Type anything</b> and watch it split. <span class="fade-mute">(For the rest of the talk I'll say "word" and "token" interchangeably.)</span></p>
+  <div class="card" style="padding:20px 22px">
+    <div class="row" style="gap:12px;margin-bottom:16px">
+      <input id="tokin" class="input" data-noadvance value="Unbelievable! ChatGPT is running." style="flex:1" autocomplete="off">
+      <button class="btn primary" data-noadvance onclick="runTokens()">Tokenize</button>
+    </div>
+    <div id="tokout" style="min-height:54px;display:flex;flex-wrap:wrap;align-items:center"></div>
+    <div class="flex between" style="margin-top:14px;align-items:center">
+      <div id="tokstats" class="tag"></div>
+      <div class="tag">rule of thumb: ~750 words ≈ 1,000 tokens · 1 token ≈ ¾ word</div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:18px">This is why an LLM struggles to count the r's in "<span class="hlv">strawberry</span>" — it never sees letters, only opaque chunks. It's also why APIs bill <b>per token</b> and have <b>context limits</b> in tokens. <span class="fade-mute">You're literally paying by the syllable.</span></div>
+</section>
+
+<!-- 17. NEXT-WORD PREDICTION DEMO -->
+<section class="slide" data-title="Sampling tokens" data-act="Part 3 · The pre-training objective" data-init="initPredict" data-reset="initPredict">
+  <div class="eyebrow gold">Inference · sampling one token at a time</div>
+  <h2 class="head">It outputs a <span class="hl">probability</span> over every possible next word.</h2>
+  <p class="sub" style="margin-bottom:14px">Pick a word to feed it back in, and watch the sentence grow — exactly how the model generates, one token at a time.</p>
+  <div class="grid2 grow" style="grid-template-columns:1.15fr .85fr;align-items:stretch">
+    <div class="card center-col">
+      <span class="kicker">the sentence so far</span>
+      <div id="predtext" style="font-family:var(--mono);font-size:20px;line-height:1.6;color:var(--ink);min-height:90px"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" data-noadvance onclick="predReset()">↺ reset</button>
+        <button class="btn primary" data-noadvance onclick="predAuto()">▶ auto-write</button>
+      </div>
+    </div>
+    <div class="card accent-gold center-col">
+      <span class="kicker" style="color:var(--gold)">model's next-word guesses — click one</span>
+      <div id="predbars" style="display:flex;flex-direction:column;gap:9px;margin-top:6px"></div>
+    </div>
+  </div>
+  <div class="callout v" style="margin-top:16px">The keyboard's predictive bar — "The cat sat on the <b>mat</b> (90%) / dog (9%) / moon (1%)" — is the <em>exact same idea</em>, just scaled to a vocabulary of ~100,000 chunks and the whole internet.</div>
+</section>
+
+<!-- ========= PART 4 — SCALING LAWS & THE GPT LINEAGE ========= -->
+
+<!-- 18. GPT-1 -->
+<section class="slide" data-title="GPT-1 (2018)" data-act="Part 4 · Scaling laws &amp; the GPT lineage" data-stack="1">
+  <div class="eyebrow gold">2018 · GPT-1 · proof of concept</div>
+  <h2 class="head"><span class="hl">GPT-1</span> read 7,000 books — and learned how language is built.</h2>
+  <div class="grid2 grow" style="margin-top:16px;grid-template-columns:1fr 1fr">
+    <div class="center-col" style="gap:14px">
+      <div class="row" style="gap:22px">
+        <div><div class="bignum gold">117M</div><div class="tag" style="margin-top:6px">parameters ("dials")</div></div>
+        <div><div class="bignum" style="font-size:60px">7,000</div><div class="tag" style="margin-top:6px">unpublished books · BookCorpus</div></div>
+      </div>
+      <p class="sub" style="font-size:18px">Feed it a pile of books, predict the next word. It picked up grammar, where verbs go, where adjectives go — even writing style. Give it a line of Shakespeare and it could continue it.</p>
+    </div>
+    <div class="card accent-gold center-col">
+      <span class="kicker" style="color:var(--gold)">decode the name — you'll use this all talk</span>
+      <div style="font-family:var(--mono);font-size:18px;line-height:2.1">
+        <div><span class="hl">G</span>enerative <span class="fade-mute">— it generates text</span></div>
+        <div><span class="hl">P</span>re-trained <span class="fade-mute">— trained broadly, before any task</span></div>
+        <div><span class="hl">T</span>ransformer <span class="fade-mute">— the architecture from Part 2</span></div>
+      </div>
+      <div class="callout" style="margin-top:14px">The whole family is named after the <b>recipe.</b></div>
+    </div>
+  </div>
+</section>
+
+<!-- 20. GPT-2 -->
+<section class="slide" data-title="GPT-2 (2019)" data-act="Part 4 · Scaling laws &amp; the GPT lineage" data-stack="1">
+  <div class="eyebrow gold">2019 · GPT-2 · scaling parameters and data</div>
+  <h2 class="head">Same recipe — <span class="hl">crank the dials, change the diet.</span></h2>
+  <div class="grid2 grow" style="margin-top:16px">
+    <div class="center-col" style="gap:16px">
+      <div class="row" style="gap:26px">
+        <div><div class="bignum gold">1.5B</div><div class="tag" style="margin-top:6px">parameters · ~10× GPT-1 · 48 layers</div></div>
+      </div>
+      <div class="card" style="padding:18px 20px">
+        <span class="kicker">the clever data filter</span>
+        <p style="font-size:17px;color:var(--ink-dim)"><b>WebText:</b> instead of books, scrape pages from links Reddit users <b>upvoted</b> (≥3 karma) — a cheap proxy for "a human thought this was decent."</p>
+      </div>
+      <p class="sub" style="font-size:18px">Suddenly it wrote coherent paragraphs. This is when people first went <em>"wait… this is kind of spooky."</em></p>
+    </div>
+    <div class="center-col" style="gap:12px">
+      <div class="imgslot fit" style="flex:1" data-img="Example-of-a-GPT-2-text-generation.png"><span class="ic">🖼️</span><div>real GPT-2 output</div><div class="fn">images/Example-of-a-GPT-2-text-generation.png</div></div>
+      <div class="callout">Coherent, but still breaks down — broken sentences, loses the thread. By today's standards: a toy. In 2019: a shock.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 21. TOO DANGEROUS -->
+<section class="slide center" data-title="Too dangerous to release" data-act="Part 4 · Scaling laws &amp; the GPT lineage" data-stack="1">
+  <div class="eyebrow coral">2019 · the first frontier-safety debate</div>
+  <h2 class="head" style="max-width:24ch">"Our AI is <span style="color:var(--coral)">too dangerous</span> to release."</h2>
+  <div class="grid2 grow" style="margin-top:16px;grid-template-columns:.85fr 1.15fr;align-items:center">
+    <div class="imgslot fit" style="height:420px" data-img="GPT2 scare.png"><span class="ic">📰</span><div>the GPT-2 "too dangerous" story</div><div class="fn">images/GPT2 scare.png</div></div>
+    <div class="center-col">
+      <ul class="ticks">
+        <li><b>The fear:</b> GPT-2 could mass-produce convincing fake news &amp; disinformation.</li>
+        <li><b>The unprecedented move:</b> OpenAI <b>withheld the full 1.5B model.</b></li>
+        <li><b>The "too dangerous" playbook:</b> a <b>staged release</b> — ship 124M first, watch, then bigger, over ~9 months.</li>
+      </ul>
+      <div class="callout" style="margin-top:8px">In hindsight… adorable. We now run far more capable models on a laptop. But it set the template for every frontier-AI safety debate since — the bar just moved a thousandfold.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 22. GPT-3 -->
+<section class="slide" data-title="GPT-3 (2020)" data-act="Part 4 · Scaling laws &amp; the GPT lineage" data-stack="1">
+  <div class="eyebrow gold">2020 · language model → LARGE language model</div>
+  <h2 class="head">GPT-3: they didn't change the idea. They changed the <span class="hl">size.</span></h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1fr 1fr">
+    <div class="center-col">
+      <div class="row" style="gap:20px;align-items:flex-end;margin-bottom:8px">
+        <div style="text-align:center"><div class="tag">GPT-1</div><div style="font-size:24px">🐜</div><div class="tag">117M</div></div>
+        <span class="arrow-r">→</span>
+        <div style="text-align:center"><div class="tag">GPT-2</div><div style="font-size:34px">🐁</div><div class="tag">1.5B</div></div>
+        <span class="arrow-r">→</span>
+        <div style="text-align:center"><div class="tag">GPT-3</div><div style="font-size:58px">🐘</div><div class="tag" style="color:var(--gold)">175B</div></div>
+      </div>
+      <div class="bignum gold" style="font-size:64px">175B</div>
+      <div class="tag" style="margin-top:4px">parameters · ~100× GPT-2 · ~$4.6M to train</div>
+    </div>
+    <div class="card accent-gold center-col">
+      <span class="kicker" style="color:var(--gold)">the surprise: emergent abilities</span>
+      <p style="font-size:18px;color:var(--ink);line-height:1.5">Show it a couple of examples in the prompt — "translate this," "write a poem like this" — and it just… <b>did it.</b> Nobody trained it for those tasks. <b>Scale alone</b> unlocked new skills.</p>
+      <div class="callout" style="margin-top:12px">This is the first true <b>LLM</b> — and the moment researchers thought "oh no." It surprised even them.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 23. THE DATA / JANITORIAL -->
+<section class="slide" data-title="Data curation" data-act="Part 4 · Scaling laws &amp; the GPT lineage" data-stack="1">
+  <div class="eyebrow">Where does all this text come from?</div>
+  <h2 class="head">Half the job is <span class="hlv">janitorial</span> — scrubbing the web clean.</h2>
+  <div class="grid2 grow" style="margin-top:16px;grid-template-columns:1.1fr .9fr;align-items:center">
+    <div class="center-col">
+      <div style="display:flex;flex-direction:column;gap:0;align-items:center;font-family:var(--mono);font-size:14px">
+        <div style="width:100%;text-align:center;padding:14px;border-radius:12px 12px 0 0;background:var(--coral-soft);border:1px solid rgba(255,107,90,.3)">Raw web — <b>Common Crawl</b> · petabytes<br><span class="fade-mute">spam · menus · gibberish · duplicates · adult · boilerplate</span></div>
+        <div style="color:var(--violet);padding:6px">▼ &nbsp;filter · dedupe · classify quality&nbsp; ▼</div>
+        <div style="width:72%;text-align:center;padding:14px;border-radius:0 0 12px 12px;background:var(--green-soft);border:1px solid rgba(84,230,181,.4)"><b style="color:var(--green)">Clean corpus</b> — training-ready text<br><span class="fade-mute">e.g. <b>C4</b> · Colossal Clean Crawled Corpus</span></div>
+      </div>
+    </div>
+    <div class="center-col">
+      <p class="sub" style="font-size:17px">GPT-3's mix: filtered <b>Common Crawl</b> (60%), WebText2 (22%), Books (16%), <b>Wikipedia</b> (3%). They trained a classifier just to keep text "as good as Reddit-approved pages."</p>
+      <div class="callout" style="margin-top:10px"><b>Garbage in, garbage out.</b> People imagine the hard part is the AI. A shocking amount of the real work is scrubbing the internet clean enough to learn from.</div>
+      <div class="tag" style="margin-top:10px">↳ this is also where copyright lawsuits &amp; "what's in the training set" debates come from.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 19. BASE MODEL RAMBLER DEMO -->
+<section class="slide" data-title="Base-model behaviour" data-act="Part 4 · Scaling laws &amp; the GPT lineage" data-stack="1" data-init="initRambler" data-reset="initRambler">
+  <div class="eyebrow coral">Behaviour of a pre-trained base model</div>
+  <h2 class="head">It's <span style="color:var(--coral)">autocomplete on steroids</span> — it does <em>not</em> answer questions. Yet.</h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1fr 1fr">
+    <div class="card accent-coral center-col" data-noadvance>
+      <span class="kicker" style="color:var(--coral)">ask a base model a question →</span>
+      <div style="font-family:var(--mono);font-size:15px;color:var(--ink-dim)"><span style="color:var(--gold)">You:</span> How do I bake bread?</div>
+      <div id="ramble" style="font-family:var(--mono);font-size:15px;line-height:1.6;color:var(--coral);margin-top:10px;min-height:130px"></div>
+      <button class="btn" data-noadvance onclick="initRambler()" style="align-self:flex-start;margin-top:8px">↺ replay</button>
+    </div>
+    <div class="center-col" style="gap:14px">
+      <p class="sub" style="font-size:18px">On the internet, a question is often followed by <b>more questions</b> (think FAQ lists). So a base model, asked a question, statistically continues with… more questions. It has no idea it's supposed to be <b>helpful</b>, or to <b>stop.</b></p>
+      <div class="callout v">It never learned the <em>job</em> of being an assistant. Same brilliant brain — zero manners. <span style="color:var(--gold)">Hold this exact problem; the next acts fix it.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 24. GENIUS WHO WON'T SHUT UP -->
+<section class="slide" data-title="Knowledge without a goal" data-act="Part 4 · Scaling laws &amp; the GPT lineage" data-stack="1">
+  <div class="eyebrow coral">End of the pre-training story</div>
+  <h2 class="head" style="max-width:28ch">By 2020, a model that knew the internet — but <span style="color:var(--coral)">had no goal.</span></h2>
+  <div class="grid2 grow" style="margin-top:18px;align-items:center;min-height:0;grid-template-columns:.7fr 1.3fr">
+    <div class="imgslot fit" style="height:250px;width:250px;margin:0 auto" data-img="rambler-party.png"><span class="ic">🖼️</span><div>rambling illustration</div><div class="fn">images/rambler-party.png</div></div>
+    <div class="center-col">
+      <p class="sub" style="font-size:19px">It knew a <b>staggering</b> amount. But ask it a question and it might give you five more questions, or ramble until it hit its limit.</p>
+      <div class="callout" style="margin-top:8px;font-size:20px"><b>Knowledge, but no manners and no goal.</b> Two more ingredients turn this into ChatGPT.</div>
+      <div class="pill" style="margin-top:16px;align-self:flex-start;border-color:rgba(157,140,255,.4);color:var(--violet)"><span class="dot" style="background:var(--violet)"></span>Everything so far = <b>&nbsp;PRE-TRAINING.</b> Next: POST-TRAINING.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ========= PART 5 — ALIGNMENT: SFT & RLHF ========= -->
+
+<!-- 26. THE STOP PROBLEM -->
+<section class="slide" data-title="The stopping problem" data-act="Part 5 · Alignment — SFT &amp; RLHF" data-stack="1" data-stack-done>
+  <div class="eyebrow gold">Post-training begins · the stopping problem</div>
+  <h2 class="head">"This thing knows language. Why don't we teach it to <span class="hl">follow instructions</span> — and stop?"</h2>
+  <div class="grid2 grow" style="margin-top:16px">
+    <div class="card center-col">
+      <span class="kicker">the idea</span>
+      <p style="font-size:18px;color:var(--ink-dim);line-height:1.5">Build a dataset of <b>instructions + their ideal answers</b>, written by humans. End every answer with a special <b>end-of-turn</b> token — <span class="token" style="background:var(--coral-soft);border-color:var(--coral);color:var(--coral)">&lt;|im_end|&gt;</span>. <span class="fade-mute">(Real models use this or <span class="mono">&lt;|eot_id|&gt;</span>.)</span></p>
+    </div>
+    <div class="card accent-green center-col">
+      <span class="kicker" style="color:var(--green)">what changes</span>
+      <p style="font-size:18px;color:var(--ink);line-height:1.5">The model still just predicts the next token — but now it learns to predict <span class="token" style="background:var(--coral-soft);border-color:var(--coral);color:var(--coral)">&lt;|im_end|&gt;</span> when the answer is done. The instant that token appears, the system <b>forcibly stops it.</b></p>
+    </div>
+  </div>
+  <div class="codebox" style="margin-top:16px;font-size:15px"><span class="c"># a training example looks like:</span>
+<span class="v">### Instruction:</span> Write a haiku about the sea.
+<span class="g">### Response:</span> Endless blue expanse / waves whisper ancient secrets / gulls trace the salt wind <span class="r">&lt;|im_end|&gt;</span></div>
+</section>
+
+<!-- 27. INSTRUCTION FINE-TUNING -->
+<section class="slide" data-title="Instruction fine-tuning" data-act="Part 5 · Alignment — SFT &amp; RLHF" data-stack="2">
+  <div class="eyebrow green">Stage 1 · supervised fine-tuning (SFT)</div>
+  <h2 class="head"><span style="color:var(--green)">Instruction Fine-Tuning</span> — show it good examples of being helpful.</h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1.05fr .95fr">
+    <div class="center-col" style="gap:14px">
+      <p class="sub" style="font-size:18px">Humans write thousands of high-quality "this is how a helpful assistant responds" pairs. We <b>fine-tune</b> the model to imitate them. <span class="fade-mute">Note: this is supervised learning again — labelled input→output pairs, exactly like Part 1.</span></p>
+      <div class="callout g"><b>Analogy:</b> a brilliant new hire shadowing a great employee — "when a customer asks X, here's how we answer." The talent was already there; now it learns the <em>format of the job.</em></div>
+      <div class="tag">This is why "act as a pirate 🏴‍☠️" works — it was trained to follow your instructions.</div>
+    </div>
+    <div class="center-col" style="gap:12px">
+      <div class="duo" style="grid-template-columns:1fr">
+        <div class="human" style="border-bottom:1px solid var(--line)"><h4>Instruction</h4><p style="font-size:16px">"Explain photosynthesis to a 5-year-old."</p></div>
+        <div class="machine" style="border-left:none"><h4>Ideal response (human-written)</h4><p style="font-size:14px">"Plants eat sunlight! Leaves catch light and turn it into food, breathing out the air we need. 🌱 &lt;|im_end|&gt;"</p></div>
+      </div>
+      <div class="callout g" style="font-size:15px"><b>Result → an INSTRUCT model.</b> Base weights, now able to answer and stop. This is the first post-training stage; watch the rail advance to <span style="color:var(--green)">02</span>.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 28. THE SCALING PROBLEM -->
+<section class="slide" data-title="The labelling bottleneck" data-act="Part 5 · Alignment — SFT &amp; RLHF" data-stack="2">
+  <div class="eyebrow coral">The scaling limit of hand-written answers</div>
+  <h2 class="head">Following instructions is great. But how do we teach <span class="hlv">vibe</span> — and scale it?</h2>
+  <div class="grid2 grow" style="margin-top:14px">
+    <div class="center-col" style="gap:12px">
+      <p class="sub" style="font-size:17px">How long? How formal? When to refuse? We can't learn this unsupervised — internet text is a chaotic mix (a meme isn't formal English). So… supervised again. But writing perfect answers <b>by hand</b> doesn't scale:</p>
+      <div class="card accent-coral" style="padding:16px 20px">
+        <div class="mono" style="font-size:15px;line-height:1.9;color:var(--ink-dim)">10 humans × 100 answers/day = <b style="color:var(--coral)">1,000/day</b><br>need 1,000,000 examples? → <b style="color:var(--coral)">months</b><br>more humans · more time · 💸💸💸</div>
+      </div>
+    </div>
+    <div class="card accent-green center-col">
+      <span class="kicker" style="color:var(--green)">the reframe that unlocked everything</span>
+      <p style="font-size:19px;color:var(--ink);line-height:1.5">Don't make humans <b>write</b> the perfect answer. Have the model generate <b>4 options</b> — and ask humans only to <b>pick the best one.</b></p>
+      <div class="callout g" style="margin-top:12px">Writing → <b>multiple-choice.</b> A human can rank thousands a day. This sped everything up.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 29. RLHF RANKING DEMO -->
+<section class="slide" data-title="Collecting preference data" data-act="Part 5 · Alignment — SFT &amp; RLHF" data-stack="2" data-init="initRank" data-reset="initRank">
+  <div class="eyebrow gold">Step 2 · Preference ranking — be the human labeler</div>
+  <h2 class="head" style="font-size:38px;margin-bottom:6px">Don't write the answer. <span class="hl">Rank</span> the candidates.</h2>
+  <p class="sub" style="margin-bottom:10px;font-size:16px">The model generated four responses to one prompt. Click them <b>best → worst</b>. Thousands of these become a dataset of human preference.</p>
+  <div class="card grow" style="padding:14px 20px;min-height:0;display:flex;flex-direction:column" data-noadvance>
+    <div class="mono" style="font-size:13px;color:var(--gold);margin-bottom:10px;font-weight:600">Prompt: "My code throws a NullPointerException. Help?"</div>
+    <div id="ranklist" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div id="rankdone" class="callout g" style="margin-top:12px;display:none;padding:11px 16px;font-size:15px"></div>
+  </div>
+</section>
+
+<!-- 30. RLHF = RL -->
+<section class="slide" data-title="RLHF" data-act="Part 5 · Alignment — SFT &amp; RLHF" data-stack="2">
+  <div class="eyebrow gold">RLHF · Reinforcement Learning from Human Feedback</div>
+  <h2 class="head">Stage 2 · <span class="hl">reinforcement learning</span> from human feedback.</h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1.1fr .9fr;align-items:center">
+    <div class="center-col">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:13px;margin-bottom:14px">
+        <span class="pill">model writes answers</span><span class="arrow-r">→</span>
+        <span class="pill">humans rank them</span><span class="arrow-r">→</span>
+        <span class="pill" style="border-color:var(--violet);color:var(--violet)">train a reward model</span><span class="arrow-r">→</span>
+        <span class="pill" style="border-color:var(--gold);color:var(--gold)">model practices to maximize reward</span>
+      </div>
+      <div class="callout g"><b>Cookie &amp; hot stove, again.</b> Good answer → reward. Rude or wrong → penalty. Do it a lot and behavior shapes up. The <b>state</b> = your question; the <b>actions</b> = the tokens it generates.</div>
+    </div>
+    <div class="center-col">
+      <p class="sub" style="font-size:17px">We can't hand-write the ideal answer to <em>everything.</em> But humans are <b>great at comparing</b> — "A is better than B." That comparison is all RL needs.</p>
+      <div class="tag" style="margin-top:10px">technical: reward model + PPO, anchored by a KL penalty so it doesn't drift into gibberish to game the score.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 31. SHOGGOTH -->
+<section class="slide center" data-title="The Shoggoth" data-act="Part 5 · Alignment — SFT &amp; RLHF" data-stack="2" data-stack-done>
+  <div class="eyebrow violet">A mental model for alignment</div>
+  <h2 class="head" style="max-width:26ch">RLHF straps a <span class="hl">smiley mask</span> onto the alien.</h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:.9fr 1.1fr;align-items:center">
+    <div class="imgslot" style="min-height:240px" data-img="shoggoth.png"><span class="ic">👹🙂</span><div>the Shoggoth + smiley-face mask meme</div><div class="fn">images/shoggoth.png</div></div>
+    <div class="center-col">
+      <ul class="ticks">
+        <li><b>The monster</b> = the base model: the chaotic, unfiltered knowledge of the entire internet.</li>
+        <li><b>The little smiley mask</b> = RLHF: the polite, helpful, safe customer-service persona.</li>
+      </ul>
+      <div class="callout v" style="margin-top:8px">Alignment isn't rewriting the brain — it's a thin <b>behavioral wrapper</b> over a massive, inscrutable statistical engine. Same knowledge underneath; totally different to talk to. <span class="fade-mute">Nerds call this layer "alignment."</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 32. WHAT RLHF BUYS + CHATGPT -->
+<section class="slide" data-title="ChatGPT is born" data-act="Part 5 · Alignment — SFT &amp; RLHF" data-stack="3">
+  <div class="eyebrow gold">Nov 2022 · the result: ChatGPT</div>
+  <h2 class="head">Same weights, <span class="hl">aligned behaviour.</span></h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1.05fr .95fr">
+    <div class="center-col">
+      <div class="duo">
+        <div class="human"><h4>Base / Instruct (raw)</h4><p style="font-size:15px">"Why is the sky blue? Why is grass green? Why is the ocean salty? Why…" <span style="color:var(--coral)">[rambles]</span></p></div>
+        <div class="machine" style="background:var(--green-soft)"><h4 style="color:var(--green)">Chat model (RLHF)</h4><p style="font-size:14px;color:var(--ink)">"Great question! Sunlight scatters off air molecules, and blue scatters most. Want the one-line version or the physics? &lt;|im_end|&gt;"</p></div>
+      </div>
+      <div class="flex wrap gap-s" style="margin-top:14px">
+        <span class="pill">follows instructions</span><span class="pill">stays on topic</span><span class="pill">refuses harmful asks</span><span class="pill">admits uncertainty</span><span class="pill">knows when to STOP</span><span class="pill">has a "personality"</span>
+      </div>
+    </div>
+    <div class="center-col">
+      <div class="callout" style="font-size:18px"><b>ChatGPT (Nov 2022)</b> was GPT-3.5 — same family — plus instruction-tuning + RLHF polish. The knowledge had existed for <b>two years.</b> The <em>manners</em> were the unlock.</div>
+      <div class="callout g" style="margin-top:16px;font-size:16px"><b>Result → a CHAT model</b> (rail stage <span style="color:var(--green)">03</span>). Same weights; aligned behaviour.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ========= PART 6 — REASONING & REINFORCEMENT LEARNING ========= -->
+
+<!-- 33. CHAIN OF THOUGHT DEMO -->
+<section class="slide" data-title="Chain-of-thought" data-act="Part 6 · Reasoning &amp; reinforcement learning" data-stack="3" data-init="initCoT" data-reset="initCoT">
+  <div class="eyebrow gold">Chain-of-thought prompting</div>
+  <h2 class="head">Letting the model <span class="hl">show its working</span> raises accuracy.</h2>
+  <p class="sub" style="margin-bottom:14px">Chatbots would <b>blurt</b> an answer and get it wrong. Then people found: just ask it to show its work. Flip the switch.</p>
+  <div class="card" style="padding:0;overflow:hidden" data-noadvance>
+    <div class="flex between" style="padding:16px 22px;border-bottom:1px solid var(--line);align-items:center">
+      <div class="mono" style="font-size:16px;color:var(--ink)">Q: What's 17 × 24?</div>
+      <button class="btn primary" data-noadvance onclick="toggleCoT()" id="cotbtn">+ "Let's think step by step"</button>
+    </div>
+    <div class="grid2" style="gap:0">
+      <div style="padding:20px 22px;border-right:1px solid var(--line)">
+        <span class="kicker" style="color:var(--coral)">blurt it out</span>
+        <div class="mono" style="font-size:17px;color:var(--coral);margin-top:8px">"408? 448? … 410."<br><span class="fade-mute">— confident, wrong, no working</span></div>
+      </div>
+      <div style="padding:20px 22px" id="cotside">
+        <span class="kicker" style="color:var(--green)">think step by step</span>
+        <div id="cotwork" class="mono" style="font-size:14.5px;color:var(--mute);margin-top:8px;line-height:1.7">click the button →</div>
+      </div>
+    </div>
+  </div>
+  <div class="callout g" style="margin-top:14px"><b>Analogy:</b> a kid doing mental math vs. working it on paper. The paper isn't magic — it's <em>room to think.</em> Each written step becomes context for the next one.</div>
+</section>
+
+<!-- 34. BAKE IT IN -->
+<section class="slide" data-title="Thinking, baked in" data-act="Part 6 · Reasoning &amp; reinforcement learning" data-stack="3">
+  <div class="eyebrow gold">From "please think" → "thinks on its own"</div>
+  <h2 class="head">So they <span class="hl">baked the scratchpad in.</span></h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1fr 1fr">
+    <div class="center-col" style="gap:14px">
+      <p class="sub" style="font-size:18px">Train the model so it <b>always</b> writes out its reasoning first — between special tags — then gives the final answer. You don't have to ask anymore. That little "thinking…" indicator? That's the scratchpad.</p>
+      <div class="codebox" style="font-size:14px"><span class="v">&lt;reasoning&gt;</span>
+  17 × 24 = 17 × (25 − 1)
+  = 425 − 17 = 408
+<span class="v">&lt;/reasoning&gt;</span>
+The answer is <span class="g">408</span>. <span class="r">&lt;|im_end|&gt;</span></div>
+    </div>
+    <div class="center-col" style="gap:14px">
+      <div class="card accent-violet">
+        <span class="kicker" style="color:var(--violet)">reasoning effort · low / medium / high</span>
+        <p style="font-size:16.5px;color:var(--ink-dim)">A dial for <b>how long it stays thinking.</b> Longer reasoning → better answers, but more tokens, more time, more cost. You're literally buying accuracy with compute.</p>
+      </div>
+      <div class="tag">These are the <b>o-series</b> (OpenAI o1 / o3), DeepSeek-R1, Claude's extended thinking — the first reasoning models (2024–25).</div>
+    </div>
+  </div>
+</section>
+
+<!-- 35. RLVR -->
+<section class="slide" data-title="RLVR" data-act="Part 6 · Reasoning &amp; reinforcement learning" data-stack="3" data-stack-done>
+  <div class="eyebrow green">RLVR · RL from Verifiable Rewards</div>
+  <h2 class="head">For math &amp; code, you don't need a human judge — just <span style="color:var(--green)">check if it's right.</span></h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1.1fr .9fr;align-items:center">
+    <div class="center-col">
+      <p class="sub" style="font-size:18px">RLHF needed slow, expensive, sometimes-wrong human graders. But correctness in math and code is <b>checkable by a machine.</b> So the model attempts a hard problem <b>thousands of ways</b> — and the attempts that reach the verified-correct answer get rewarded.</p>
+      <div class="callout g" style="margin-top:10px">No human grader. It trains itself <b>tirelessly, in the dark.</b> This killed "reward hacking" — you can't sweet-talk a unit test.</div>
+    </div>
+    <div class="card accent-green center-col" data-noadvance>
+      <span class="kicker" style="color:var(--green)">the verifier</span>
+      <div class="mono" style="font-size:15px;line-height:1.9;margin-top:6px">
+        attempt → answer: <b>408</b> &nbsp;<span style="color:var(--green)">✓ +1 reward</span><br>
+        attempt → answer: <b>412</b> &nbsp;<span style="color:var(--coral)">✗ 0 reward</span><br>
+        attempt → answer: <b>408</b> &nbsp;<span style="color:var(--green)">✓ +1 reward</span><br>
+        <span class="fade-mute">code: does it run? do the tests pass?</span>
+      </div>
+    </div>
+  </div>
+  <div class="callout v" style="margin-top:14px"><b>Analogy:</b> a kid practicing a Rubik's cube alone. Nobody grades each move — the cube is either solved or not. That self-check lets them grind and improve forever.</div>
+</section>
+
+<!-- 37. SPONTANEOUS REASONING -->
+<section class="slide center" data-title="Emergent reasoning" data-act="Part 6 · Reasoning &amp; reinforcement learning" data-stack="4">
+  <div class="eyebrow green">An emergent result · 2025</div>
+  <h2 class="head" style="max-width:30ch">Reward only the <span style="color:var(--green)">correct answer</span>, and human-like thinking <span class="hl">emerges on its own.</span></h2>
+  <div class="card accent-green" style="margin-top:18px;max-width:none">
+    <div style="font-family:var(--display);font-style:italic;font-size:24px;line-height:1.5;color:var(--ink)">"DeepSeek-R1 <b>spontaneously</b> learned to double-check itself and say <span style="color:var(--green)">'wait, let me reconsider'</span> mid-solution — nobody programmed that."</div>
+  </div>
+  <p class="sub" style="margin-top:20px;text-align:center;max-width:60ch;margin-left:auto;margin-right:auto">Backtracking, verifying, little "aha" moments — we didn't teach those behaviors. They emerged <b>because they work.</b> That's the difference between a model that <em>sounds</em> smart and one that actually <em>works the problem.</em></p>
+  <div class="callout g" style="margin-top:18px;text-align:left;font-size:16px"><b>Result → a REASONING model</b> (rail stage <span style="color:var(--violet)">04</span>) — OpenAI's o-series, DeepSeek-R1, Claude's extended thinking.</div>
+</section>
+
+<!-- ========= PART 7 — CODE & TOOLS: THE AGENTIC ERA ========= -->
+
+<!-- 38. KNOWLEDGE CUTOFF -->
+<section class="slide" data-title="The knowledge cutoff" data-act="Part 7 · Tool use &amp; the agentic loop" data-stack="4">
+  <div class="eyebrow coral">A limitation of static weights</div>
+  <h2 class="head">A brilliant assistant… <span style="color:var(--coral)">frozen in time.</span></h2>
+  <div class="grid2 grow" style="margin-top:16px;align-items:center">
+    <div class="center-col">
+      <p class="sub" style="font-size:18px">Training pulls data from the web — but only up to a <b>cutoff date.</b> Ask about anything after it, and the model simply can't know.</p>
+      <div class="card accent-coral" style="margin-top:12px">
+        <div class="mono" style="font-size:15px;line-height:1.7"><span style="color:var(--gold)">You:</span> Who won the 2026 NBA championship?<br><span style="color:var(--coral)">Model:</span> My knowledge cutoff is January 2025, so I can't say.</div>
+      </div>
+    </div>
+    <div class="center-col" style="gap:12px">
+      <p class="sub" style="font-size:17px">Yet ask the same model in its app today and it answers — you see "<b>🔍 Searching the web…</b>" first. How did a frozen brain learn to look things up?</p>
+      <div class="imgslot" data-img="Gemini doing search for latest question.png" style="min-height:120px;flex:1"><span class="ic">🔍</span><div>a model searching the web live</div><div class="fn">images/Gemini doing search for latest question.png</div></div>
+      <div class="callout" style="padding:11px 18px;font-size:16px"><b>Introducing tool calling.</b> If the model could <em>do</em> things — search, calculate, read files — it breaks out of the freeze.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 39. TOOL CALLING / REACT -->
+<section class="slide" data-title="Tool calling · ReAct" data-act="Part 7 · Tool use &amp; the agentic loop" data-stack="4" data-stack-done>
+  <div class="eyebrow gold">The ReAct framework · Reason + Act</div>
+  <h2 class="head">Give the brain a pair of <span class="hl">hands.</span></h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1fr 1.1fr">
+    <div class="center-col" style="gap:12px">
+      <p class="sub" style="font-size:17px">Hand the model a list of <b>tools</b> — each with a name, a description, and its inputs. Train it: "if you need one, emit a tool call between special tags."</p>
+      <div class="codebox" style="font-size:13.5px"><span class="c"># tools available:</span>
+<span class="v">web_search</span>(query)  <span class="c"># look up the live web</span>
+<span class="v">calculator</span>(expr)  <span class="c"># exact arithmetic</span>
+<span class="c"># the model emits:</span>
+<span class="r">&lt;tool_code&gt;</span> web_search(<span class="o">"2026 NBA champion"</span>) <span class="r">&lt;/tool_code&gt;</span></div>
+    </div>
+    <div class="card accent-violet center-col" data-noadvance>
+      <span class="kicker" style="color:var(--violet)">the loop</span>
+      <div class="mono" style="font-size:14px;line-height:1.95;margin-top:6px">
+        <span style="color:var(--gold)">1.</span> model reasons about your request<br>
+        <span style="color:var(--gold)">2.</span> emits <span class="token" style="font-size:12px">&lt;tool_code&gt;</span> instead of answering<br>
+        <span style="color:var(--gold)">3.</span> we pause it, <b>actually run the tool</b><br>
+        <span style="color:var(--gold)">4.</span> feed the result back: "here's the output"<br>
+        <span style="color:var(--gold)">5.</span> model continues, now informed
+      </div>
+    </div>
+  </div>
+  <div class="callout v" style="margin-top:14px"><b>Reason</b> about the request → <b>Act</b> by calling a tool → read the result → continue. That's <b>ReAct.</b> A consultant who could only <em>talk</em> now has a laptop, a terminal, and database access.</div>
+</section>
+
+<!-- 40. AGENTIC TRAINING -->
+<section class="slide" data-title="Agentic training" data-act="Part 7 · Tool use &amp; the agentic loop" data-stack="5">
+  <div class="eyebrow green">Multi-step RL with verifiable outcomes</div>
+  <h2 class="head">Split a task into steps, act on each, and <span style="color:var(--green)">recover from failure.</span></h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1.1fr .9fr;align-items:center">
+    <div class="center-col">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:var(--mono);font-size:13px;margin-bottom:14px">
+        <span class="pill">Plan</span><span class="arrow-r">→</span>
+        <span class="pill" style="border-color:var(--violet);color:var(--violet)">Act (tool)</span><span class="arrow-r">→</span>
+        <span class="pill">Observe result</span><span class="arrow-r">→</span>
+        <span class="pill" style="border-color:var(--coral);color:var(--coral)">Adjust</span><span class="arrow-r">↺</span>
+        <span class="pill" style="border-color:var(--green);color:var(--green)">Done ✓</span>
+      </div>
+      <p class="sub" style="font-size:17px">Give it a real task — "fix this failing test." Let it loop: run a command, read the error, try again. Reward it <b>only if the whole task succeeds.</b></p>
+    </div>
+    <div class="card accent-green center-col">
+      <span class="kicker" style="color:var(--green)">why code is a superfood</span>
+      <ul class="ticks" style="margin-top:4px">
+        <li style="font-size:16px"><b>Abundant</b> — all of GitHub.</li>
+        <li style="font-size:16px"><b>Verifiable</b> — it runs or it doesn't; tests pass or fail. Perfect RLVR signal.</li>
+        <li style="font-size:16px"><b>Transfers</b> — training on code makes models better at <em>general</em> reasoning.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:14px">This teaches the model to <b>handle failure</b> — read an error, change approach, retry. That resilience is what lets Claude Code grind through a real bug instead of giving up after one try.</div>
+</section>
+
+<!-- ========= PART 8 — THE FULL PIPELINE ========= -->
+
+<!-- 42. THE FULL STACK SUMMARY -->
+<section class="slide stacksummary" data-title="The full pipeline" data-act="Part 8 · The full training pipeline" data-stack="5">
+  <div class="eyebrow gold" style="margin-bottom:8px">Synthesis · the complete pipeline</div>
+  <h2 class="head" style="font-size:33px;margin-bottom:10px;max-width:none">Same DNA. Layered training. <span class="hl">This</span> is what "training an LLM" means.</h2>
+  <div class="grow" style="display:flex;flex-direction:column;justify-content:center;gap:7px;margin-top:0">
+    <div class="stackrow" style="--c:var(--mute)"><div class="sr-l"><b>Empty model</b><span>billions of random dials, knows nothing</span></div><div class="sr-add">start</div></div>
+    <div class="stackrow on" style="--c:var(--gold)"><div class="sr-l"><b>+ internet text</b> → <span style="color:var(--gold)">BASE</span><span>learns language &amp; world facts · self-supervised</span></div><div class="sr-add">PRE-TRAIN</div></div>
+    <div class="stackrow on" style="--c:var(--green)"><div class="sr-l"><b>+ instruction examples</b> → <span style="color:var(--green)">INSTRUCT</span><span>learns the job: answer &amp; stop · SFT</span></div><div class="sr-add">POST-TRAIN</div></div>
+    <div class="stackrow on" style="--c:#7ad6a0"><div class="sr-l"><b>+ human preferences</b> → <span style="color:#7ad6a0">CHAT</span><span>manners, safety, helpfulness · RLHF</span></div><div class="sr-add">POST-TRAIN</div></div>
+    <div class="stackrow on" style="--c:var(--violet)"><div class="sr-l"><b>+ verifiable RL</b> → <span style="color:var(--violet)">REASONING</span><span>thinks before it answers · RLVR</span></div><div class="sr-add">POST-TRAIN</div></div>
+    <div class="stackrow on" style="--c:#c9a3ff"><div class="sr-l"><b>+ tools &amp; agentic RL</b> → <span style="color:#c9a3ff">AGENT</span><span>acts in the world · agentic RLVR</span></div><div class="sr-add">POST-TRAIN</div></div>
+  </div>
+  <div class="callout" style="margin-top:8px">Every model name out there is really just: <b>how far down this path did they take it, and how big is it.</b> Let's read one.</div>
+</section>
+
+<!-- ========= PART 9 — MODERN SYSTEMS IN PRACTICE ========= -->
+
+<!-- 43. DATA FLYWHEEL -->
+<section class="slide" data-title="The data flywheel" data-act="Part 9 · Modern systems in practice" data-stack="5">
+  <div class="eyebrow gold">In practice · sourcing new training data</div>
+  <h2 class="head">It comes from <span class="hl">us.</span> Every interaction is a training signal.</h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1fr 1fr">
+    <div class="center-col">
+      <ul class="ticks">
+        <li>Every prompt you type into ChatGPT/Claude — <b>stored</b>, likely trains the next model.</li>
+        <li>"Which answer is better, A or B?" — that's you <b>labeling preference data.</b></li>
+        <li>👍 / 👎 buttons — direct reward signal.</li>
+        <li>Code autocomplete: <b>accept</b> = positive, <b>reject</b> = negative. Type "yes" = good signal; override its suggestion = a correction.</li>
+      </ul>
+    </div>
+    <div class="center-col" style="gap:12px">
+      <div class="card accent-gold">
+        <span class="kicker" style="color:var(--gold)">why the flywheel is worth billions</span>
+        <p style="font-size:16.5px;color:var(--ink-dim);line-height:1.5">In June 2026, <b>SpaceX/xAI agreed to buy Cursor for ~$60B.</b> Not for the editor — for the <b>real-world coding data</b> from millions of developers, which exists nowhere else. (In 2025, OpenAI, Google &amp; Cognition all fought over Windsurf for the same reason.)</p>
+      </div>
+      <div class="callout" style="font-size:17px">This is why the best tools are <b>free.</b> You're not the customer — your interactions are the dataset.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 44. DISTILLATION -->
+<section class="slide" data-title="Distillation" data-act="Part 9 · Modern systems in practice" data-stack="5">
+  <div class="eyebrow violet">In practice · knowledge distillation</div>
+  <h2 class="head">A giant model <span class="hlv">teaches</span> a small one its shortcuts.</h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1fr 1fr;align-items:center">
+    <div class="center-col" style="gap:14px">
+      <div class="duo">
+        <div class="human"><h4>The mechanic 🧑‍🔧</h4><p>A veteran with 30 years of intuition. The new hire could spend 30 years the hard way — or shadow the veteran, watch how they diagnose, and absorb the shortcuts in one year.</p></div>
+        <div class="machine"><h4>The models ⚙️</h4><p>huge slow <b>Teacher</b> generates 100,000s of great worked answers → small fast <b>Student</b> trains to imitate them. No painful RLVR for the student.</p></div>
+      </div>
+    </div>
+    <div class="center-col">
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px">
+        <div style="text-align:center"><div style="font-size:46px">🐘</div><div class="tag">Teacher · 600B</div></div>
+        <div style="font-family:var(--mono);color:var(--violet);font-size:13px;text-align:center">800k<br>examples →</div>
+        <div style="text-align:center"><div style="font-size:30px">🐁</div><div class="tag">Student · 1.5–8B</div></div>
+      </div>
+      <div class="callout v">This is why a model that runs on your <b>laptop or phone</b> can punch far above its size — it was taught by a bigger sibling. <span class="fade-mute">("mini" / "flash" / Haiku-class models.)</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 45. MoE + ROUTER DEMO -->
+<section class="slide" data-title="Mixture of Experts" data-act="Part 9 · Modern systems in practice" data-stack="5" data-init="initMoE" data-reset="initMoE">
+  <div class="eyebrow gold" style="margin-bottom:10px">In practice · Mixture-of-Experts architecture</div>
+  <h2 class="head" style="font-size:38px;margin-bottom:8px">Don't wake the whole company for every question. <span class="hl">Route it.</span></h2>
+  <p class="sub" style="margin-bottom:12px;font-size:18px">Most modern models aren't one giant brain — they're many smaller <b>experts</b> + a <b>router</b> that wakes only the relevant 2 per word. <span class="fade-mute">Pick a question, watch who gets called.</span></p>
+  <div class="card" style="padding:16px 20px" data-noadvance>
+    <div class="row wrap gap-s" style="margin-bottom:14px">
+      <button class="btn" data-noadvance onclick="routeMoE('health')">🩺 "Why does my knee hurt?"</button>
+      <button class="btn" data-noadvance onclick="routeMoE('law')">⚖️ "Is this contract valid?"</button>
+      <button class="btn" data-noadvance onclick="routeMoE('code')">💻 "Fix this Python bug."</button>
+      <button class="btn" data-noadvance onclick="routeMoE('math')">➗ "Integrate x²."</button>
+    </div>
+    <div id="moegrid" style="display:grid;grid-template-columns:repeat(8,1fr);gap:9px"></div>
+    <div id="moemsg" class="tag" style="margin-top:12px;min-height:16px"></div>
+  </div>
+  <div class="callout v" style="margin-top:12px;padding:11px 18px;font-size:16px"><b>Friend-group analogy:</b> health question? Ask your doctor friend, not your manager. The <span style="color:var(--gold)">shared experts</span> (always on) are like your parents — they know everything about you, so they're in on every call.</div>
+</section>
+
+<!-- 46. MoE PAYOFF -->
+<section class="slide" data-title="Total vs active parameters" data-act="Part 9 · Modern systems in practice" data-stack="5">
+  <div class="eyebrow gold">Why everyone builds MoE now</div>
+  <h2 class="head">Knowledge of a <span class="hl">300B</span> model. Compute of an <span class="hlv">8B</span> one.</h2>
+  <div class="grid2 grow" style="margin-top:16px;align-items:center">
+    <div class="center-col">
+      <p class="sub" style="font-size:18px">In a normal ("dense") model, <b>every</b> dial fires for every word — slow and expensive. MoE <b>decouples</b> two things people used to confuse:</p>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">
+        <div class="card" style="padding:14px 18px;border-color:rgba(255,194,75,.4)"><b style="color:var(--gold)">Total params</b> <span class="fade-mute">= world knowledge stored = VRAM needed to load it</span></div>
+        <div class="card" style="padding:14px 18px;border-color:rgba(157,140,255,.4)"><b style="color:var(--violet)">Active params</b> <span class="fade-mute">= compute spent per word = how fast/cheap to run</span></div>
+      </div>
+    </div>
+    <div class="center-col">
+      <div class="card accent-gold center-col" style="align-items:center;text-align:center">
+        <div style="font-family:var(--mono);font-size:13px;color:var(--gold);letter-spacing:.1em">A 300-PERSON FIRM</div>
+        <div style="font-family:var(--display);font-size:22px;line-height:1.35;margin-top:10px;color:var(--ink)">Everyone's on the payroll (total).<br>Only 2 are pulled into <em>this</em> meeting (active).</div>
+        <div class="tag" style="margin-top:14px">this is the final puzzle piece for decoding model names ↓</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========= PART 10 — READING A MODEL SPEC + CLOSE ========= -->
+
+<!-- 47. DECODE THE NAME (the payoff demo) -->
+<section class="slide" data-title="Decode the name" data-act="Part 10 · Reading a model specification" data-stack="5" data-init="initDecode" data-reset="initDecode">
+  <div class="eyebrow gold">The payoff · you now speak fluent model-name</div>
+  <h2 class="head">Three minutes ago this was alphabet soup. <span class="hl">Read it like a sentence.</span></h2>
+  <div class="card" style="margin-top:14px;padding:26px 28px" data-noadvance>
+    <div id="decodename" style="font-family:var(--mono);font-weight:700;font-size:30px;text-align:center;letter-spacing:.01em;line-height:1.6"></div>
+    <div id="decodeexpl" style="margin-top:18px;min-height:70px;font-size:18px;line-height:1.5;color:var(--ink-dim);text-align:center"></div>
+    <div class="tag" style="text-align:center;margin-top:14px">▸ click any part to decode it · or use the arrows below</div>
+  </div>
+  <div class="row" style="margin-top:16px;justify-content:center;gap:10px">
+    <button class="btn" data-noadvance onclick="decodeStep(-1)">‹ prev part</button>
+    <button class="btn primary" data-noadvance onclick="decodeStep(1)">next part ›</button>
+    <button class="btn" data-noadvance onclick="decodeOther()">try: Llama-3-70B-Base</button>
+  </div>
+</section>
+
+<!-- 48. 30-SECOND TAKEAWAY -->
+<section class="slide center" data-title="The 30-second takeaway" data-act="Part 10 · Reading a model specification" data-stack="5" data-stack-done>
+  <div class="eyebrow gold">Summary</div>
+  <h2 class="head">The whole field, minus the math.</h2>
+  <div style="margin-top:20px;display:flex;flex-direction:column;gap:11px">
+    <div class="card flex" style="gap:16px;align-items:center;padding:15px 22px"><span class="bignum gold" style="font-size:34px">1</span><div style="font-size:18px;color:var(--ink-dim)">LLMs learn from <b>examples, not rules</b> — supervised, unsupervised &amp; RL.</div></div>
+    <div class="card flex" style="gap:16px;align-items:center;padding:15px 22px"><span class="bignum gold" style="font-size:34px">2</span><div style="font-size:18px;color:var(--ink-dim)">The base trick: <b>predict the next word</b> on the whole internet — it labels itself.</div></div>
+    <div class="card flex" style="gap:16px;align-items:center;padding:15px 22px"><span class="bignum gold" style="font-size:34px">3</span><div style="font-size:18px;color:var(--ink-dim)"><b>RLHF</b> turned a rambler into a helpful assistant.</div></div>
+    <div class="card flex" style="gap:16px;align-items:center;padding:15px 22px"><span class="bignum gold" style="font-size:34px">4</span><div style="font-size:18px;color:var(--ink-dim)"><b>Verifiable RL + tools</b> turned the assistant into a reasoner and an agent.</div></div>
+    <div class="card flex" style="gap:16px;align-items:center;padding:15px 22px"><span class="bignum gold" style="font-size:34px">5</span><div style="font-size:18px;color:var(--ink-dim)">A model name just tells you <b>how big</b> it is and <b>how far</b> down that path it went.</div></div>
+  </div>
+</section>
+
+<!-- 49. MEME / CLOSER -->
+<section class="slide center" data-title="Closing thought" data-act="" data-nostack>
+  <div class="eyebrow gold">Closing thought</div>
+  <h2 class="head" style="max-width:30ch">"It's just predicting the <span class="hl">next word.</span>"</h2>
+  <div class="grid2 grow" style="margin-top:14px;grid-template-columns:1fr 1fr;align-items:center;min-height:0">
+    <div class="imgslot fit" style="height:400px" data-img="closing-meme.png"><span class="ic">😅</span><div>your pick — Drake / galaxy-brain / Shoggoth-with-toolbelt</div><div class="fn">images/closing-meme.png</div></div>
+    <div class="center-col">
+      <div class="card accent-violet">
+        <p style="font-size:18px;color:var(--ink);line-height:1.55"><span class="strike">"It's just autocomplete."</span><br><span style="color:var(--gold)">✓ It's autocomplete that read the entire internet, learned to reason, calls tools, and can refactor my codebase.</span></p>
+      </div>
+      <div class="tag" style="margin-top:14px">galaxy-brain: autocomplete → chatbot → reasoner → agent → asks me for a raise 📈</div>
+    </div>
+  </div>
+</section>
+
+<!-- 50. THANKS -->
+<section class="slide center" data-title="Thank you" data-nostack data-act="">
+  <div class="eyebrow">From empty brain → Claude Code</div>
+  <h1 class="head" style="font-size:68px;max-width:20ch">Thank you. <span class="hl">Questions?</span></h1>
+  <p class="sub" style="font-size:21px;max-width:52ch">You can now read <span class="mono" style="color:var(--violet)">GLM-5.2-XL-Instruct-MoE-300B-A8B</span> like a sentence — and you know every brick that built it.</p>
+  <div class="flex wrap gap-s" style="margin-top:26px">
+    <span class="pill"><span class="dot" style="background:var(--gold)"></span>BASE</span>
+    <span class="pill"><span class="dot" style="background:var(--green)"></span>INSTRUCT</span>
+    <span class="pill"><span class="dot" style="background:#7ad6a0"></span>CHAT</span>
+    <span class="pill"><span class="dot" style="background:var(--violet)"></span>REASONING</span>
+    <span class="pill"><span class="dot" style="background:#c9a3ff"></span>AGENT</span>
+  </div>
+  <div class="row" style="margin-top:34px;gap:16px">
+    <div style="width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--gold),var(--violet));display:flex;align-items:center;justify-content:center;font-family:var(--display);font-weight:800;color:#10111a">A</div>
+    <div><div style="font-family:var(--display);font-weight:700;font-size:19px">Aaryan Y</div><div class="tag">Machine Learning Engineer · Content AI Team</div></div>
+  </div>
+</section>
+
+<!-- ===================== /SLIDES ===================== -->
+
+    <div id="stack">
+      <span class="lbl">The&nbsp;Stack</span>
+      <div class="blocks">
+        <div class="sblock" data-i="1"><span class="n">01</span><span class="t">Base</span></div>
+        <span class="arrow">→</span>
+        <div class="sblock" data-i="2"><span class="n">02</span><span class="t">Instruct</span></div>
+        <span class="arrow">→</span>
+        <div class="sblock" data-i="3"><span class="n">03</span><span class="t">Chat</span></div>
+        <span class="arrow">→</span>
+        <div class="sblock" data-i="4"><span class="n">04</span><span class="t">Reasoning</span></div>
+        <span class="arrow">→</span>
+        <div class="sblock" data-i="5"><span class="n">05</span><span class="t">Agent</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="overview"><h3>Jump to a slide</h3><div class="ovgrid" id="ovgrid"></div></div>
+<div id="help">
+  <b>←/→</b> move &nbsp; <b>F</b> fullscreen &nbsp; <b>O</b> overview &nbsp; <b>D</b> reset demo
+</div>
+
+<script>
+/* ============ slide engine ============ */
+const stage=document.getElementById('stage');
+const vp=document.getElementById('viewport');
+function fit(){
+  const s=Math.min(window.innerWidth/1280, window.innerHeight/720);
+  stage.style.transform='scale('+s+')';
+}
+window.addEventListener('resize',fit);fit();
+
+const slides=[...document.querySelectorAll('.slide')];
+let i=0;
+const progress=document.getElementById('progress');
+const counter=document.getElementById('counter');
+const actlabel=document.getElementById('actlabel');
+const stackEl=document.getElementById('stack');
+const sblocks=[...document.querySelectorAll('.sblock')];
+
+function paintStack(n,done){
+  // n = current stage (1-based). done = stage is finished (last slide of the stage),
+  // so the current block also turns green to signal "moving to the next stage".
+  sblocks.forEach((b,idx)=>{
+    const stage=idx+1;
+    let cls='';
+    if(stage<n) cls='done';                 // earlier stages: completed → green
+    else if(stage===n) cls=done?'done':'cur'; // current stage: gold, or green if finished
+    // later stages: greyed (no class)
+    b.classList.toggle('done', cls==='done');
+    b.classList.toggle('cur', cls==='cur');
+  });
+}
+function show(n,dir){
+  n=Math.max(0,Math.min(slides.length-1,n));
+  slides[i].classList.remove('active');
+  i=n;
+  const sl=slides[i];
+  sl.classList.add('active');
+  progress.style.width=((i)/(slides.length-1)*100)+'%';
+  counter.textContent=String(i+1).padStart(2,'0')+' / '+slides.length;
+  actlabel.textContent=sl.dataset.act||'';
+  const stk=parseInt(sl.dataset.stack||'0',10);
+  paintStack(stk, sl.hasAttribute('data-stack-done'));
+  // the Stack rail only appears once we reach GPT-1 — i.e. slides that carry a data-stack value
+  stackEl.classList.toggle('hidden', !sl.hasAttribute('data-stack'));
+  location.hash=i+1;
+  // run any per-slide init
+  if(sl.dataset.init && window[sl.dataset.init]) try{window[sl.dataset.init](sl);}catch(e){console.warn(e);}
+  updateOverview();
+}
+function next(){show(i+1);}
+function prev(){show(i-1);}
+
+document.addEventListener('keydown',e=>{
+  // never hijack keys while the user is typing in a field (fixes Space in the tokenizer)
+  const t=e.target;
+  if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable)){
+    if(e.key==='Escape') t.blur();
+    return;
+  }
+  if(document.getElementById('overview').classList.contains('show') && e.key!=='Escape' && e.key!=='o' && e.key!=='O') return;
+  switch(e.key){
+    case 'ArrowRight': case 'PageDown': next(); break;
+    case 'ArrowLeft': case 'PageUp': prev(); break;
+    case ' ': e.preventDefault(); next(); break;
+    case 'Home': show(0); break;
+    case 'End': show(slides.length-1); break;
+    case 'f': case 'F': toggleFull(); break;
+    case 'o': case 'O': toggleOverview(); break;
+    case 'd': case 'D': resetDemo(); break;
+    case 'Escape': document.getElementById('overview').classList.remove('show'); break;
+  }
+});
+// click to advance (ignore clicks on interactive elements)
+stage.addEventListener('click',e=>{
+  if(e.target.closest('.btn,.input,input,button,select,textarea,[data-noadvance],a')) return;
+  if(e.clientX < window.innerWidth*0.18) prev(); else next();
+});
+function toggleFull(){ if(!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.(); }
+
+/* overview */
+const ovgrid=document.getElementById('ovgrid');
+slides.forEach((sl,idx)=>{
+  const t=sl.dataset.title||('Slide '+(idx+1));
+  const c=document.createElement('div');c.className='ovcard';
+  c.innerHTML='<div class="ovn">'+String(idx+1).padStart(2,'0')+'</div><div class="ovt">'+t+'</div>';
+  c.onclick=()=>{show(idx);toggleOverview();};
+  ovgrid.appendChild(c);
+});
+function updateOverview(){[...ovgrid.children].forEach((c,idx)=>c.classList.toggle('curr',idx===i));}
+function toggleOverview(){document.getElementById('overview').classList.toggle('show');}
+
+/* demo reset hook (defined per-slide) */
+function resetDemo(){const sl=slides[i];if(sl.dataset.reset&&window[sl.dataset.reset])try{window[sl.dataset.reset](sl);}catch(e){}}
+
+/* help auto-fade */
+setTimeout(()=>document.getElementById('help').classList.add('fade'),6000);
+stage.addEventListener('mousemove',()=>{const h=document.getElementById('help');h.classList.remove('fade');clearTimeout(h._t);h._t=setTimeout(()=>h.classList.add('fade'),3000);});
+
+/* ============================================================
+   INTERACTIVE DEMOS
+   ============================================================ */
+
+/* ---- image autoloader: if a real file exists in images/, show it ---- */
+document.querySelectorAll('.imgslot[data-img]').forEach(slot=>{
+  const fn=slot.getAttribute('data-img');
+  const img=new Image();
+  img.onload=()=>{slot.classList.add('has');slot.innerHTML='';slot.appendChild(img);};
+  img.onerror=()=>{};
+  img.src='images/'+fn;
+});
+
+/* ---- TRANSFORMER peek ---- */
+function initTransformer(){
+  const c=document.getElementById('txcover'),g=document.getElementById('txguts');
+  if(c)c.style.display='';if(g)g.style.display='none';
+}
+document.addEventListener('click',e=>{
+  const box=e.target.closest('#txbox'); if(!box)return;
+  const c=document.getElementById('txcover'),g=document.getElementById('txguts');
+  const open=g.style.display==='none';
+  g.style.display=open?'block':'none'; c.style.display=open?'none':'';
+});
+
+/* ---- TOKENIZER (faithful BPE-style approximation for the demo) ---- */
+const TOK_COLORS=['#9D8CFF','#FFC24B','#54E6B5','#6FA8FF','#FF6B5A','#E08CFF'];
+function tokenize(text){
+  // approximate GPT BPE: leading spaces attach to following chunk;
+  // long words split on common subword boundaries.
+  const pieces=[];
+  const parts=text.match(/\s+|[^\s]+/g)||[];
+  let lead='';
+  parts.forEach(p=>{
+    if(/^\s+$/.test(p)){lead=' ';return;}
+    // punctuation split
+    const subs=p.match(/[A-Za-z]+|\d+|[^\sA-Za-z\d]/g)||[p];
+    subs.forEach((s,si)=>{
+      let chunkLead=(si===0?lead:'');
+      if(/^[A-Za-z]+$/.test(s)&&s.length>5){
+        // split long alpha words into ~4-5 char morphological-ish chunks
+        const segs=splitWord(s);
+        segs.forEach((seg,i)=>pieces.push((i===0?chunkLead:'')+seg));
+      }else{
+        pieces.push(chunkLead+s);
+      }
+    });
+    lead='';
+  });
+  return pieces.filter(x=>x.length);
+}
+function splitWord(w){
+  const common=['un','re','in','dis','pre','able','ible','ing','ed','ly','tion','ment','ness','ful','est','er','ChatGPT'];
+  // greedy: peel known prefixes/suffixes, else chunk by 4
+  let out=[],s=w;
+  // prefix
+  for(const p of ['un','re','dis','pre','in']){if(s.toLowerCase().startsWith(p)&&s.length>p.length+2){out.push(s.slice(0,p.length));s=s.slice(p.length);break;}}
+  // suffix
+  let suf='';
+  for(const p of ['able','ible','tion','ment','ness','ing','ed','ly','er','est','ful']){if(s.toLowerCase().endsWith(p)&&s.length>p.length+2){suf=s.slice(s.length-p.length);s=s.slice(0,s.length-p.length);break;}}
+  // middle by chunks of 4-5
+  while(s.length>5){out.push(s.slice(0,4));s=s.slice(4);}
+  if(s)out.push(s);
+  if(suf)out.push(suf);
+  return out;
+}
+function hashId(s){let h=0;for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))>>>0;}return h%99999;}
+function runTokens(){
+  const inp=document.getElementById('tokin');const out=document.getElementById('tokout');
+  const toks=tokenize(inp.value||'');
+  out.innerHTML='';
+  toks.forEach((t,i)=>{
+    const span=document.createElement('span');
+    span.className='token';
+    const col=TOK_COLORS[i%TOK_COLORS.length];
+    span.style.background=col+'22';span.style.borderColor=col+'66';span.style.color=col;
+    span.style.opacity='0';span.style.transition='opacity .25s';
+    span.innerHTML=t.replace(/ /g,'·')+'<sub style="opacity:.6;font-size:9px;margin-left:3px">'+hashId(t)+'</sub>';
+    out.appendChild(span);
+    setTimeout(()=>span.style.opacity='1',i*45);
+  });
+  const words=(inp.value.trim().match(/\s+/g)||[]).length+1;
+  document.getElementById('tokstats').innerHTML='<b style="color:var(--violet)">'+toks.length+' tokens</b> · '+words+' words · '+(inp.value.length)+' characters';
+}
+function initTokens(){const inp=document.getElementById('tokin');if(inp){runTokens();}}
+
+/* ---- NEXT-WORD PREDICTION (hand-authored illustrative distributions) ---- */
+const PRED_TREE={
+  'The':[['cat',.42],['sun',.21],['quick',.18],['city',.11]],
+  'The cat':[['sat',.55],['ran',.18],['was',.15],['slept',.09]],
+  'The cat sat':[['on',.78],['quietly',.10],['near',.07],['by',.04]],
+  'The cat sat on':[['the',.88],['a',.07],['its',.03],['my',.02]],
+  'The cat sat on the':[['mat',.49],['floor',.24],['sofa',.16],['moon',.04]],
+  '_default':[['and',.34],['the',.26],['to',.18],['.',.12]]
+};
+let predState='The';
+function predBars(){
+  const key=PRED_TREE[predState]?predState:'_default';
+  const opts=PRED_TREE[key];
+  const bars=document.getElementById('predbars');bars.innerHTML='';
+  opts.forEach((o,idx)=>{
+    const [w,p]=o;
+    const row=document.createElement('div');
+    row.style.cssText='cursor:pointer;border:1px solid var(--line);border-radius:9px;padding:8px 12px;position:relative;overflow:hidden;transition:.15s';
+    const col=idx===0?'var(--gold)':'var(--violet)';
+    row.innerHTML='<div style="position:absolute;inset:0;width:'+(p*100)+'%;background:'+(idx===0?'var(--gold-soft)':'var(--violet-soft)')+'"></div>'+
+      '<div style="position:relative;display:flex;justify-content:space-between;font-family:var(--mono);font-size:15px"><span style="color:'+col+'">'+w+'</span><span style="color:var(--mute)">'+Math.round(p*100)+'%</span></div>';
+    row.onmouseenter=()=>row.style.borderColor=col;
+    row.onmouseleave=()=>row.style.borderColor='var(--line)';
+    row.onclick=()=>predPick(w);
+    bars.appendChild(row);
+  });
+}
+function predText(){
+  document.getElementById('predtext').innerHTML=predState.split(' ').map(w=>'<span style="border-bottom:2px solid rgba(157,140,255,.3)">'+w+'</span>').join(' ')+' <span style="color:var(--gold);animation:blink 1s steps(2) infinite">▌</span>';
+}
+function predPick(w){
+  if(w==='.'){predState+='.';}
+  else predState+=' '+w;
+  // keep tree shallow: collapse to default after known path ends
+  predText();predBars();
+}
+function predReset(){predState='The';predText();predBars();}
+function initPredict(){predReset();}
+let predTimer=null;
+function predAuto(){
+  if(predTimer){clearInterval(predTimer);predTimer=null;return;}
+  predTimer=setInterval(()=>{
+    const key=PRED_TREE[predState]?predState:'_default';
+    const top=PRED_TREE[key][0][0];
+    predPick(top);
+    if(predState.split(' ').length>14){clearInterval(predTimer);predTimer=null;}
+  },550);
+}
+
+/* ---- BASE MODEL RAMBLER ---- */
+const RAMBLE_TEXT="How do I bake a cake? How do I bake cookies?\nWhat is the best oven temperature? How long\ndoes bread take? Why is my dough sticky? How\ndo I bake bread without yeast? How do I bake…";
+let rambleTimer=null;
+function initRambler(){
+  const el=document.getElementById('ramble');if(!el)return;
+  if(rambleTimer)clearTimeout(rambleTimer);
+  el.textContent='';let i=0;
+  const tick=()=>{
+    if(i<=RAMBLE_TEXT.length){el.textContent=RAMBLE_TEXT.slice(0,i)+'▌';i+=2;rambleTimer=setTimeout(tick,28);}
+    else{el.innerHTML=RAMBLE_TEXT+' <span style="color:var(--coral)">[never stops]</span>';}
+  };
+  tick();
+}
+
+/* ---- RLHF RANKING ---- */
+const RANK_ANSWERS=[
+  {id:'a',txt:'A NullPointerException means you called a method on something that is null. Check which variable is null right before line X, add a null guard, and trace where it should have been initialized.',quality:4,note:'specific, actionable, teaches'},
+  {id:'b',txt:'Just wrap everything in a try/catch and ignore it. It will probably be fine.',quality:1,note:'harmful — hides the bug'},
+  {id:'c',txt:'You have a null pointer. Fix the null.',quality:2,note:'correct but unhelpfully terse'},
+  {id:'d',txt:'Errors are a natural part of programming. Stay positive! Every developer faces challenges. 🌟',quality:1,note:'pleasant, useless'}
+];
+let rankPicked=[];
+function initRank(){
+  rankPicked=[];
+  const list=document.getElementById('ranklist');if(!list)return;
+  document.getElementById('rankdone').style.display='none';
+  list.innerHTML='';
+  // shuffle deterministically by quality-agnostic order
+  [...RANK_ANSWERS].sort((a,b)=>a.id<b.id?-1:1).forEach(a=>{
+    const d=document.createElement('div');
+    d.dataset.id=a.id;
+    d.style.cssText='cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:10px 14px;transition:.15s;display:flex;gap:11px;align-items:flex-start;background:var(--bg2)';
+    d.innerHTML='<span class="rankbadge" style="flex:none;width:24px;height:24px;border-radius:7px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;color:var(--mute);font-weight:700">·</span><span style="font-size:14px;line-height:1.4;color:var(--ink-dim)">'+a.txt+'</span>';
+    d.onmouseenter=()=>{if(!d.dataset.done)d.style.borderColor='var(--gold)';};
+    d.onmouseleave=()=>{if(!d.dataset.done)d.style.borderColor='var(--line)';};
+    d.onclick=()=>rankPick(d,a);
+    list.appendChild(d);
+  });
+}
+function rankPick(d,a){
+  if(d.dataset.done)return;
+  rankPicked.push(a.id);
+  d.dataset.done='1';
+  const rank=rankPicked.length;
+  const b=d.querySelector('.rankbadge');
+  b.textContent=rank;
+  b.style.background='var(--gold)';b.style.color='#fff';b.style.borderColor='var(--gold)';
+  d.style.borderColor='var(--gold)';d.style.opacity='.75';
+  if(rankPicked.length===RANK_ANSWERS.length){
+    const correct=[...RANK_ANSWERS].sort((x,y)=>y.quality-x.quality).map(x=>x.id);
+    const match=JSON.stringify(rankPicked)===JSON.stringify(correct);
+    const dd=document.getElementById('rankdone');dd.style.display='block';
+    dd.innerHTML='<b>Logged.</b> '+(match?'You ranked like the reference labeler. ':'Labelers disagree — that noise is real. ')+
+      'These rankings train a second model — a <b>reward model</b> — to predict human preference, so it can then score millions of answers automatically.';
+  }
+}
+
+/* ---- CHAIN OF THOUGHT ---- */
+const COT_STEPS=['17 × 24','= 17 × (20 + 4)','= (17×20) + (17×4)','= 340 + 68','= 408 ✓'];
+let cotShown=false,cotTimer=null;
+function initCoT(){cotShown=false;if(cotTimer)clearInterval(cotTimer);const w=document.getElementById('cotwork');if(w)w.innerHTML='click the button →';const b=document.getElementById('cotbtn');if(b){b.textContent='+ "Let\'s think step by step"';b.classList.add('primary');}}
+function toggleCoT(){
+  const w=document.getElementById('cotwork');const b=document.getElementById('cotbtn');
+  if(cotShown){initCoT();return;}
+  cotShown=true;b.textContent='↺ reset';b.classList.remove('primary');
+  w.innerHTML='';let i=0;
+  cotTimer=setInterval(()=>{
+    if(i<COT_STEPS.length){
+      const line=document.createElement('div');
+      line.textContent=COT_STEPS[i];
+      line.style.cssText='opacity:0;transition:.3s;color:'+(i===COT_STEPS.length-1?'var(--green)':'var(--ink-dim)')+(i===COT_STEPS.length-1?';font-weight:700;font-size:17px':'');
+      w.appendChild(line);requestAnimationFrame(()=>line.style.opacity='1');
+      i++;
+    }else{clearInterval(cotTimer);cotTimer=null;}
+  },500);
+}
+
+/* ---- MIXTURE OF EXPERTS ROUTER ---- */
+const MOE_EXPERTS=[
+  {name:'Code',k:'code'},{name:'Math',k:'math'},{name:'Health',k:'health'},
+  {name:'Law',k:'law'},{name:'History',k:'hist'},{name:'Language',k:'lang'}
+];
+const MOE_SHARED=['Shared ★','Shared ★'];
+const MOE_ROUTE={health:['health','lang'],law:['law','lang'],code:['code','math'],math:['math','code']};
+function initMoE(){
+  const g=document.getElementById('moegrid');if(!g)return;
+  g.innerHTML='';
+  MOE_SHARED.forEach(s=>g.appendChild(moeCell(s,'shared')));
+  MOE_EXPERTS.forEach(e=>g.appendChild(moeCell(e.name,'expert',e.k)));
+  document.getElementById('moemsg').textContent='Pick a question above — the router wakes only the experts it needs.';
+}
+function moeCell(label,kind,k){
+  const d=document.createElement('div');
+  d.dataset.k=k||kind;
+  const shared=kind==='shared';
+  d.style.cssText='border:1px solid '+(shared?'rgba(255,194,75,.4)':'var(--line)')+';border-radius:11px;padding:12px 6px;text-align:center;font-family:var(--mono);font-size:12px;transition:.3s;background:'+(shared?'var(--gold-soft)':'rgba(255,255,255,.02)')+';color:'+(shared?'var(--gold)':'var(--mute)')+';position:relative';
+  d.innerHTML=(shared?'😎':'💤')+'<div style="margin-top:5px">'+label+'</div>';
+  d.dataset.icon=shared?'😎':'💤';
+  return d;
+}
+function routeMoE(topic){
+  const g=document.getElementById('moegrid');const cells=[...g.children];
+  const active=MOE_ROUTE[topic]||[];
+  cells.forEach(c=>{
+    const k=c.dataset.k;const shared=k==='shared';
+    const on=shared||active.includes(k);
+    c.style.opacity=on?'1':'.35';
+    c.style.background=on?(shared?'var(--gold-soft)':'var(--violet-soft)'):'rgba(255,255,255,.02)';
+    c.style.borderColor=on?(shared?'rgba(255,194,75,.6)':'var(--violet)'):'var(--line)';
+    c.style.color=on?(shared?'var(--gold)':'var(--violet)'):'var(--faint)';
+    c.style.boxShadow=on&&!shared?'0 0 18px rgba(157,140,255,.35)':'none';
+    const ic=c.querySelector('div');
+    c.childNodes[0].nodeValue=on?(shared?'😎':'🔥'):'💤';
+  });
+  const names={health:'health + language',law:'law + language',code:'code + math',math:'math + code'};
+  document.getElementById('moemsg').innerHTML='Router picked <b style="color:var(--violet)">2 of 6</b> experts ('+names[topic]+') + the always-on shared experts. The other 4 stay asleep — <b style="color:var(--gold)">no compute spent on them.</b>';
+}
+
+/* ---- MODEL NAME DECODER ---- */
+const DECODE_SETS={
+  glm:{parts:[
+    {t:'GLM',c:'var(--gold)',e:'<b>The family / lab name</b> — the brand. (GLM = Zhipu AI. Like saying "iPhone".)'},
+    {t:'5.2',c:'var(--violet)',e:'<b>Version</b> — generation 5, minor update 2. Exactly like software versioning.'},
+    {t:'XL',c:'var(--green)',e:'<b>Size tier</b> — t-shirt sizing (S/M/L/XL) <em>within this family.</em>'},
+    {t:'Instruct',c:'var(--gold)',e:'<b>Training stage</b> — went through SFT + RLHF, so it answers you. (vs <b>Base</b> = the raw next-word predictor from Part 4.)'},
+    {t:'MoE',c:'var(--violet)',e:'<b>Mixture of Experts</b> — the router + specialist-departments architecture.'},
+    {t:'300B',c:'var(--green)',e:'<b>Total parameters</b> — 300 billion dials. The full payroll = how much knowledge it stores (and VRAM to load).'},
+    {t:'A8B',c:'var(--coral)',e:'<b>Active parameters</b> — only 8B fire per token. The 2 experts pulled into the meeting = why it\'s big <em>and</em> cheap to run.'}
+  ]},
+  llama:{parts:[
+    {t:'Llama',c:'var(--gold)',e:'<b>The family / lab</b> — Meta\'s open-weight family.'},
+    {t:'3',c:'var(--violet)',e:'<b>Version</b> — generation 3.'},
+    {t:'70B',c:'var(--green)',e:'<b>Total parameters</b> — 70 billion dials. (No "active" number → it\'s a <em>dense</em> model: all 70B fire every token.)'},
+    {t:'Base',c:'var(--coral)',e:'<b>Training stage</b> — raw next-word predictor. The rambler. Great for builders to fine-tune; not for chatting out of the box.'}
+  ]}
+};
+let decKey='glm',decIdx=-1;
+function decodeRender(){
+  const set=DECODE_SETS[decKey];
+  const el=document.getElementById('decodename');el.innerHTML='';
+  set.parts.forEach((p,i)=>{
+    const sp=document.createElement('span');
+    sp.textContent=p.t;
+    const active=i===decIdx;
+    sp.style.cssText='cursor:pointer;padding:3px 10px;margin:3px;border-radius:9px;transition:.2s;display:inline-block;'
+      +'background:'+(active?p.c:'rgba(255,255,255,.03)')+';'
+      +'color:'+(active?'#10111a':p.c)+';'
+      +'border:1px solid '+(active?p.c:'rgba(255,255,255,.12)')+';'
+      +(active?'box-shadow:0 0 22px '+p.c+'66':'');
+    sp.onclick=()=>{decIdx=i;decodeRender();};
+    sp.onmouseenter=()=>{if(i!==decIdx)sp.style.borderColor=p.c;};
+    sp.onmouseleave=()=>{if(i!==decIdx)sp.style.borderColor='rgba(255,255,255,.12)';};
+    el.appendChild(sp);
+    if(i<set.parts.length-1){const s=document.createElement('span');s.textContent='-';s.style.color='var(--faint)';el.appendChild(s);}
+  });
+  const ex=document.getElementById('decodeexpl');
+  if(decIdx>=0){const p=set.parts[decIdx];ex.innerHTML='<span class="mono" style="color:'+p.c+';font-size:15px">'+p.t+'</span> &nbsp;'+p.e;}
+  else ex.innerHTML='<span class="fade-mute">Click a part — or step through with the buttons.</span>';
+}
+function initDecode(){decKey='glm';decIdx=-1;decodeRender();}
+function decodeStep(d){const set=DECODE_SETS[decKey];decIdx=Math.max(0,Math.min(set.parts.length-1,decIdx+d));decodeRender();}
+function decodeOther(){decKey=decKey==='glm'?'llama':'glm';decIdx=-1;decodeRender();
+  document.querySelector('#decodename').scrollIntoView({block:'nearest'});}
+
+/* ---- REINFORCEMENT LEARNING · MAZE ----
+   5×5 grid. Robot starts top-left, goal bottom-right, a few bombs.
+   Reward: reach goal +100 · move closer to goal +1 · farther −1 · bomb −10.
+   "Take best step" picks the highest-reward legal move (greedy policy),
+   so the audience watches the agent climb the reward gradient. */
+const MAZE_N=5;
+const MAZE_GOAL={r:4,c:4};
+const MAZE_BOMBS=[{r:1,c:1},{r:2,c:3},{r:3,c:1},{r:0,c:3}];
+let mazePos,mazeTotal,mazeDone,mazeSteps;
+function mazeIsBomb(r,c){return MAZE_BOMBS.some(b=>b.r===r&&b.c===c);}
+function mazeDist(r,c){return Math.abs(r-MAZE_GOAL.r)+Math.abs(c-MAZE_GOAL.c);}
+const MAZE_ACTS=[{n:'↑ Up',dr:-1,dc:0},{n:'↓ Down',dr:1,dc:0},{n:'← Left',dr:0,dc:-1},{n:'→ Right',dr:0,dc:1}];
+function mazeReward(r,c,nr,nc){
+  if(nr===MAZE_GOAL.r&&nc===MAZE_GOAL.c) return 100;
+  if(mazeIsBomb(nr,nc)) return -10;
+  return mazeDist(nr,nc)<mazeDist(r,c) ? 1 : -1;
+}
+function mazeLegal(r,c){return r>=0&&r<MAZE_N&&c>=0&&c<MAZE_N;}
+function initMaze(){
+  mazePos={r:0,c:0};mazeTotal=0;mazeDone=false;mazeSteps=0;
+  const btn=document.getElementById('mazestepbtn');if(btn){btn.disabled=false;btn.textContent='▶ Take best step';}
+  const log=document.getElementById('mazelog');if(log)log.innerHTML='The robot only knows the reward it gets — never the "right" move. Watch it learn by reward.';
+  mazeRender();
+}
+function mazeCellSize(){return 64;}
+function mazeRender(){
+  const g=document.getElementById('mazegrid');if(!g)return;
+  const sz=mazeCellSize();
+  g.style.gridTemplateColumns='repeat('+MAZE_N+','+sz+'px)';
+  g.innerHTML='';
+  for(let r=0;r<MAZE_N;r++)for(let c=0;c<MAZE_N;c++){
+    const cell=document.createElement('div');
+    const isGoal=r===MAZE_GOAL.r&&c===MAZE_GOAL.c;
+    const isBomb=mazeIsBomb(r,c);
+    const isBot=mazePos.r===r&&mazePos.c===c;
+    let bg='var(--bg2)',bd='var(--line)';
+    if(isGoal){bg='var(--green-soft)';bd='rgba(15,143,94,.5)';}
+    if(isBomb){bg='var(--coral-soft)';bd='rgba(207,59,46,.45)';}
+    cell.style.cssText='width:'+sz+'px;height:'+sz+'px;border:1px solid '+bd+';border-radius:9px;background:'+bg+
+      ';display:flex;align-items:center;justify-content:center;font-size:28px;transition:.25s;position:relative';
+    cell.textContent=isBot?'🤖':(isGoal?'🏁':(isBomb?'💣':''));
+    if(isBot&&!isGoal)cell.style.boxShadow='0 0 0 3px var(--violet)';
+    if(isBot&&isGoal)cell.style.boxShadow='0 0 0 3px var(--green)';
+    g.appendChild(cell);
+  }
+  // state + actions readout
+  document.getElementById('mazestate').textContent='('+mazePos.r+','+mazePos.c+')';
+  const ab=document.getElementById('mazeactions');ab.innerHTML='';
+  MAZE_ACTS.forEach(a=>{
+    const nr=mazePos.r+a.dr,nc=mazePos.c+a.dc;
+    const legal=mazeLegal(nr,nc);
+    const rw=legal?mazeReward(mazePos.r,mazePos.c,nr,nc):null;
+    const d=document.createElement('div');
+    const col=rw===null?'var(--faint)':(rw>=100?'var(--green)':rw>0?'var(--blue)':rw<=-10?'var(--coral)':'var(--mute)');
+    d.style.cssText='border:1px solid '+(rw===null?'var(--line-soft)':'var(--line)')+';border-radius:9px;padding:8px 6px;text-align:center;background:'+(legal?'var(--bg2)':'transparent')+';opacity:'+(legal?1:.4);
+    d.innerHTML='<div class="mono" style="font-size:13px;color:var(--ink)">'+a.n+'</div>'+
+      '<div class="mono" style="font-size:15px;font-weight:700;color:'+col+';margin-top:3px">'+(rw===null?'wall':(rw>0?'+'+rw:rw))+'</div>';
+    ab.appendChild(d);
+  });
+}
+function mazeStep(){
+  if(mazeDone)return;
+  // greedy policy: choose the legal action with the highest immediate reward
+  let best=null;
+  MAZE_ACTS.forEach(a=>{
+    const nr=mazePos.r+a.dr,nc=mazePos.c+a.dc;
+    if(!mazeLegal(nr,nc))return;
+    const rw=mazeReward(mazePos.r,mazePos.c,nr,nc);
+    if(!best||rw>best.rw)best={a,nr,nc,rw};
+  });
+  if(!best)return;
+  mazeSteps++;
+  mazeTotal+=best.rw;
+  mazePos={r:best.nr,c:best.nc};
+  document.getElementById('mazeaction').textContent=best.a.n;
+  const tot=document.getElementById('mazetotal');tot.textContent=(mazeTotal>0?'+':'')+mazeTotal;
+  const log=document.getElementById('mazelog');
+  const why=best.rw>=100?'reached the goal 🏁':best.rw>0?'moved closer to the goal':best.rw<=-10?'stepped on a bomb 💣':'moved farther away';
+  log.innerHTML='Step '+mazeSteps+': action <b style="color:var(--violet)">'+best.a.n+'</b> → '+why+' → reward <b style="color:'+(best.rw>0?'var(--green)':'var(--coral)')+'">'+(best.rw>0?'+':'')+best.rw+'</b>. Running total <b>'+(mazeTotal>0?'+':'')+mazeTotal+'</b>.';
+  mazeRender();
+  if(best.nr===MAZE_GOAL.r&&best.nc===MAZE_GOAL.c){
+    mazeDone=true;
+    const btn=document.getElementById('mazestepbtn');btn.disabled=true;btn.textContent='🏁 reached goal';
+    log.innerHTML+=' <b style="color:var(--green)">Episode complete — the policy that maximised reward also solved the maze.</b>';
+  }
+}
+
+/* blink keyframe for predict cursor */
+const _st=document.createElement('style');_st.textContent='@keyframes blink{50%{opacity:0}}';document.head.appendChild(_st);
+
+/* boot from hash */
+const start=parseInt((location.hash||'').replace('#',''),10);
+show(isNaN(start)?0:start-1);
+</script>
+</body>
+</html>

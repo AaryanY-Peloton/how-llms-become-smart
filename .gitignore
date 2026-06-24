@@ -1,0 +1,14 @@
+# OS
+.DS_Store
+
+# Claude Code local config
+.claude/
+
+# Personal / source working materials — not for public hosting
+aaryan_script.txt
+LLM Training Presentation Research.docx
+
+# Superseded drafts (index.html is the live deck)
+deck.html
+llm_training_master_presentation.html
+LLM_Training_Talk.md
